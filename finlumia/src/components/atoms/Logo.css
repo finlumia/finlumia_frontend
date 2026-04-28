@@ -1,0 +1,25 @@
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.logo__mark {
+  color: var(--color-accent);
+  font-size: 0.82rem;
+}
+
+.logo__title {
+  display: block;
+  font-size: 0.92rem;
+  letter-spacing: 0.08em;
+}
+
+.logo__subtitle {
+  display: block;
+  margin-top: 2px;
+  color: var(--color-text-secondary);
+  font-size: 0.64rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
