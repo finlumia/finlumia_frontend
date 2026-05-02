@@ -1,45 +1,197 @@
-import { Button } from '../atoms/Button'
-import './LandingPage.css'
+import { Header } from "../organisms/Header";
+import { HeroSection } from "../organisms/HeroSection";
+import finlumiaIcon from "../../assets/icone_finlumia.svg";
+import heroDashboard from "../../assets/hero_dashboard.svg";
+import type { TextStyleConfig } from "../atoms/text";
+import type { ButtonStyleConfig } from "../atoms/button";
+import { getFoundationByTheme } from "../../shared/styles/tokens";
+import { useTheme } from "../../shared/styles/theme.context";
 
 /**
- * Landing page institucional com CTAs para fluxo de autenticacao.
+ * Landing page entrypoint.
+ *
+ * Acts as reference composition for the final Header layout:
+ * - left: logo
+ * - center: navigation labels
+ * - right: action buttons
  */
 export function LandingPage() {
-  return (
-    <section className="landing-page">
-      <header className="landing-page__hero">
-        <span className="landing-page__tag">Plataforma financeira para empresas</span>
-        <h1>Clareza financeira para decisoes mais inteligentes</h1>
-        <p>
-          Centralize seus indicadores, identifique riscos e tome decisoes com seguranca em um
-          painel moderno e responsivo.
-        </p>
+    const { theme } = useTheme();
+    const foundation = getFoundationByTheme(theme);
+    const isDark = theme === "dark";
 
-        <div className="landing-page__actions">
-          <Button to="/cadastro">Comecar gratuitamente</Button>
-          <Button to="/login" variant="ghost">
-            Entrar na plataforma
-          </Button>
-          <Button to="/recuperar-senha" variant="ghost">
-            Recuperar senha
-          </Button>
-        </div>
-      </header>
+    const textLogoStyle: TextStyleConfig = {
+        backgroudColor: "transparent",
+        textColor: foundation.colors.brand.primary,
+        fontWeight: "700",
+        fontSize: "var(--logo-font-size)",
+        padding: "0",
+        height: "auto",
+    };
 
-      <section className="landing-page__grid" id="recursos">
-        <article>
-          <h2>Importacao de dados</h2>
-          <p>Conecte SQL, API e planilhas sem duplicar processamento.</p>
-        </article>
-        <article>
-          <h2>Analise inteligente</h2>
-          <p>Monitoramento por categoria e alertas de variacao.</p>
-        </article>
-        <article>
-          <h2>Dashboards em tempo real</h2>
-          <p>Visualize os principais indicadores do negocio em uma unica tela.</p>
-        </article>
-      </section>
-    </section>
-  )
+    const navTextStyle: TextStyleConfig = {
+        backgroundColor: "transparent",
+        textColor: foundation.colors.text.secondary,
+        fontWeight: "500",
+        fontSize: "var(--nav-font-size)",
+        padding: "0",
+        height: "auto",
+        cursor: "pointer",
+        display: "var(--header-nav-display)",
+    };
+
+    const ghostButtonStyle: ButtonStyleConfig = {
+        display: "var(--header-secondary-action-display)",
+        backgroudColor: "transparent",
+        textColor: foundation.colors.brand.primary,
+        border: `1px solid ${foundation.colors.border.default}`,
+        borderRadius: "var(--button-radius)",
+        padding: "0 var(--button-padding-inline)",
+        height: "var(--button-height)",
+        fontSize: "var(--button-font-size)",
+    };
+
+    const primaryButtonStyle: ButtonStyleConfig = {
+        backgroudColor: foundation.colors.brand.primary,
+        textColor: foundation.colors.text.inverse,
+        border: `1px solid ${foundation.colors.brand.primary}`,
+        borderRadius: "var(--button-radius)",
+        padding: "0 var(--button-padding-inline)",
+        height: "var(--button-height)",
+        fontSize: "var(--button-font-size)",
+        fontWeight: "700",
+    };
+
+    return (
+        <main>
+            <section>
+                <Header
+                    theme={theme}
+                    styleHeader={{
+                        backgroundColor: isDark ? "#051326" : foundation.colors.bg.surface,
+                        display: "flex",
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        padding: "var(--header-padding-y) var(--header-padding-x)",
+                        gap: "var(--header-gap)",
+                        centerGap: "var(--header-center-gap)",
+                        rightGap: "var(--header-right-gap)",
+                    }}
+                    leftItems={[
+                        {
+                            type: "logo",
+                            props: {
+                                text: { label: "FINLUMIA", onClick: () => console.log("Logo principal"), styleConfig: textLogoStyle, theme },
+                                icon: { src: finlumiaIcon, alt: "Logo da Finlumia", theme },
+                            },
+                        },
+                    ]}
+                    centerItems={[
+                        {
+                            type: "text",
+                            props: { label: "Recursos", onClick: () => console.log("Recursos"), styleConfig: navTextStyle, theme },
+                        },
+                        {
+                            type: "text",
+                            props: { label: "Planos", onClick: () => console.log("Planos"), styleConfig: navTextStyle, theme },
+                        },
+                        {
+                            type: "text",
+                            props: { label: "Documentacao", onClick: () => console.log("Documentacao"), styleConfig: navTextStyle, theme },
+                        },
+                    ]}
+                    rightItems={[
+                        {
+                            type: "button",
+                            props: {
+                                label: "Entrar",
+                                theme,
+                                variant: "outlined",
+                                size: "md",
+                                styleConfig: ghostButtonStyle,
+                                onClick: () => console.log("Entrar"),
+                            },
+                        },
+                        {
+                            type: "button",
+                            props: {
+                                label: "Criar conta gratis",
+                                theme,
+                                variant: "primary",
+                                size: "md",
+                                styleConfig: primaryButtonStyle,
+                                onClick: () => console.log("Criar conta gratis"),
+                            },
+                        },
+                    ]}
+                />
+                <HeroSection
+                    theme={theme}
+                    badgeText="ANÁLISE FINANCEIRA PESSOAL"
+                    title="Clareza financeira para decisões mais"
+                    highlightTitle="inteligentes"
+                    description="Centralize suas transações, identifique seus padrões de gastos e gere insights para que retome o controle total do seu patrimônio com precisão."
+                    previewImage={{
+                        src: heroDashboard,
+                        alt: "Painel financeiro da plataforma Finlumia",
+                        isSvg: true,
+                    }}
+                    primaryAction={{
+                        label: "Comecar gratuitamente",
+                        theme,
+                        variant: "primary",
+                        size: "lg",
+                        onClick: () => console.log("Comecar gratuitamente"),
+                        styleConfig: {
+                            ...primaryButtonStyle,
+                            padding: "0 var(--button-padding-inline)",
+                        },
+                    }}
+                    secondaryAction={{
+                        label: "Ver demonstracao",
+                        theme,
+                        variant: "outlined",
+                        size: "lg",
+                        onClick: () => console.log("Ver demonstracao"),
+                        styleConfig: {
+                            ...ghostButtonStyle,
+                            display: "inline-flex",
+                        },
+                    }}
+                    textStyles={{
+                        badge: {
+                            margin: "0 0 0.8rem 0",
+                            padding: "0.35rem 0.85rem",
+                            lineHeight: "1",
+                            fontSize: "0.9rem",
+                            letterSpacing: "0.02em",
+                            width: "fit-content",
+                            maxWidth: "fit-content",
+                            justifyContent: "flex-start",
+                            textAlign: "left",
+                        },
+                        title: {
+                            margin: "0",
+                            display: "block",
+                            fontSize: "clamp(2.8rem, 4.4vw, 5.2rem)",
+                            lineHeight: "1.08",
+                        },
+                        titleHighlight: {
+                            margin: "0",
+                            display: "block",
+                            fontSize: "clamp(2.8rem, 4.4vw, 5.2rem)",
+                            lineHeight: "1.08",
+                        },
+                        description: {
+                            margin: "0.6rem 0 0",
+                            fontSize: "clamp(1.0rem, 1.8vw, 1.6rem)",
+                            textColor: foundation.colors.text.secondary,
+                        },
+                    }}
+                />
+            </section>
+        </main>
+    );
+
+
 }

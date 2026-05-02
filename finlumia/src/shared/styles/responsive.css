@@ -1,0 +1,55 @@
+:root {
+  --header-padding-y: 0.6rem;
+  --header-padding-x: 1rem;
+  --header-gap: 0.6rem;
+  --header-center-gap: 1.2rem;
+  --header-right-gap: 0.8rem;
+
+  --logo-font-size: 1.8rem;
+  --nav-font-size: 1.2rem;
+
+  --button-height: 3.2rem;
+  --button-font-size: 1.2rem;
+  --button-padding-inline: 1.2rem;
+  --button-radius: 0.8rem;
+
+  --header-nav-display: none;
+  --header-secondary-action-display: none;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --header-padding-y: 0.7rem;
+    --header-padding-x: 1.6rem;
+    --header-gap: 0.8rem;
+    --header-center-gap: 1.8rem;
+    --header-right-gap: 1rem;
+
+    --logo-font-size: 2.2rem;
+    --nav-font-size: 1.3rem;
+
+    --button-height: 3.4rem;
+    --button-font-size: 1.3rem;
+    --button-padding-inline: 1.4rem;
+
+    --header-nav-display: inline-flex;
+    --header-secondary-action-display: inline-flex;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --header-padding-y: 0.8rem;
+    --header-padding-x: 2.4rem;
+    --header-gap: 0.8rem;
+    --header-center-gap: 2.8rem;
+    --header-right-gap: 1.2rem;
+
+    --logo-font-size: 2.8rem;
+    --nav-font-size: 1.4rem;
+
+    --button-height: 3.8rem;
+    --button-font-size: 1.4rem;
+    --button-padding-inline: 2rem;
+  }
+}

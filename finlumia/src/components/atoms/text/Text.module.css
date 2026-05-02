@@ -1,0 +1,9 @@
+.text {
+    transition: filter 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
+    display: inline-flex;
+    margin: 0;
+}
+
+.clickable:hover {
+    filter: brightness(1.05);
+}

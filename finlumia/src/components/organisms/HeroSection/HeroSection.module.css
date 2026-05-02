@@ -1,0 +1,42 @@
+.heroSection {
+    width: 100%;
+}
+
+.heroInner {
+    width: min(100%, var(--app-max-width));
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 760px);
+    align-items: center;
+}
+
+.content {
+    display: flex;
+    flex-direction: column;
+}
+
+.titleBlock {
+    display: flex;
+    flex-direction: column;
+}
+
+.actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.imageWrap {
+    display: flex;
+    justify-content: center;
+}
+
+@media (max-width: 1080px) {
+    .heroInner {
+        grid-template-columns: 1fr;
+    }
+
+    .imageWrap {
+        justify-content: flex-start;
+    }
+}

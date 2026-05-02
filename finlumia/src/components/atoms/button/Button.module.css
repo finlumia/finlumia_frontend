@@ -1,0 +1,17 @@
+.button {
+    cursor: pointer;
+    transition: filter 0.2s ease, transform 0.2s ease;
+    display: inline-flex;
+}
+
+.button:hover:not(:disabled) {
+    filter: brightness(0.95);
+}
+
+.button:active:not(:disabled) {
+    transform: translate(1px);
+}
+
+.button:disabled {
+    cursor: not-allowed;
+}

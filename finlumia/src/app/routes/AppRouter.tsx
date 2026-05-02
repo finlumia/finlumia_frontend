@@ -1,10 +1,8 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
-import { PublicLayout } from '../../components/templates/PublicLayout'
-import { ConfiguratorPage } from '../../components/pages/ConfiguratorPage'
 import { LandingPage } from '../../components/pages/LandingPage'
-import { LoginPage } from '../../components/pages/LoginPage'
-import { RecoveryPage } from '../../components/pages/RecoveryPage'
-import { RegisterPage } from '../../components/pages/RegisterPage'
+import { ThemeProvider } from '../../shared/styles/theme.context'
+import '../../shared/styles/theme.css'
+import '../../shared/styles/responsive.css'
 
 /**
  * Mapa central de rotas da aplicacao.
@@ -12,15 +10,12 @@ import { RegisterPage } from '../../components/pages/RegisterPage'
  */
 export function AppRouter() {
   return (
-    <Routes>
-      <Route element={<PublicLayout />} path="/">
-        <Route index element={<LandingPage />} />
-        <Route element={<LoginPage />} path="login" />
-        <Route element={<RegisterPage />} path="cadastro" />
-        <Route element={<RecoveryPage />} path="recuperar-senha" />
-        <Route element={<ConfiguratorPage />} path="configurador" />
-      </Route>
-      <Route element={<Navigate replace to="/" />} path="*" />
-    </Routes>
+    <ThemeProvider>
+      <Routes>
+        <Route element={<LandingPage />} path="/">
+        </Route>
+        <Route element={<Navigate replace to="/" />} path="*" />
+      </Routes>
+    </ThemeProvider>
   )
 }
