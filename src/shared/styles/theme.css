@@ -1,0 +1,30 @@
+:root {
+  --font-family-base: Inter, Manrope, sans-serif;
+  --app-max-width: 1920px;
+}
+
+:root[data-theme="light"] {
+  --app-bg:
+    radial-gradient(circle at 15% 10%, rgba(18, 216, 181, 0.16) 0%, transparent 36%),
+    linear-gradient(122deg, #f9fcff 0%, #eef5ff 48%, #e7f1ff 100%);
+  --app-text: #0f172a;
+}
+
+:root[data-theme="dark"] {
+  --app-bg:
+    radial-gradient(circle at 10% 10%, rgba(27, 243, 214, 0.14) 0%, transparent 35%),
+    linear-gradient(122deg, #020b21 0%, #03132f 48%, #0a1630 100%);
+  --app-text: #f8fafc;
+}
+
+body {
+  background: var(--app-bg);
+  color: var(--app-text);
+  transition: background 420ms ease, color 420ms ease;
+}
+
+main {
+  width: 100%;
+  min-height: 100vh;
+  background: transparent;
+}
