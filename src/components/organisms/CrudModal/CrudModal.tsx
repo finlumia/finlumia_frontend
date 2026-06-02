@@ -86,7 +86,6 @@ export function CrudModal({
     const primary = f.colors.brand.primary;
     const border = f.colors.border.default;
     const muted = f.colors.text.muted;
-    const surface = isDark ? f.colors.bg.surface : f.colors.bg.elevated;
 
     const chipBase: React.CSSProperties = {
         display: "inline-flex", alignItems: "center",

@@ -79,7 +79,8 @@ const uid = () => `id-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
 function normalizeBudget(raw: LegacyBudget): Budget {
     if (raw.periodStart && raw.periodEnd) {
-        const { month: _m, ...rest } = raw;
+        const rest = { ...raw };
+        delete rest.month;
         return rest;
     }
     if (raw.month) {

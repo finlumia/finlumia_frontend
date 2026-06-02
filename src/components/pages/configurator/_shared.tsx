@@ -84,7 +84,6 @@ type ConfigLayoutProps = {
 export function ConfigLayout({ activeTab, theme, children }: ConfigLayoutProps) {
     const router = useRouter();
     const f = getFoundationByTheme(theme);
-    const isDark = theme === "dark";
 
     const primary = f.colors.brand.primary;
     const border = f.colors.border.default;

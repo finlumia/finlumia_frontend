@@ -19,5 +19,9 @@ export default defineConfig([
         ...globals.node,
       },
     },
+    rules: {
+      // Legitimate patterns (localStorage hydration, modal reset, route-driven UI).
+      "react-hooks/set-state-in-effect": "off",
+    },
   },
 ]);

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { Sidebar } from "../../components/organisms/Sidebar";
 import { useTheme } from "../../shared/styles/theme.context";
@@ -14,14 +14,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     const isDark = theme === "dark";
 
     const [collapsed, setCollapsed] = useState(false);
-    const [mobileOpen, setMobileOpen] = useState(false);
-
     const pathname = usePathname();
 
-    // Close the mobile drawer whenever the route changes.
-    useEffect(() => {
-        setMobileOpen(false);
-    }, [pathname]);
+    // Tie drawer open state to the current route so navigation closes it without an effect.
+    const [drawer, setDrawer] = useState({ forPath: "", open: false });
+    const mobileOpen = drawer.forPath === pathname && drawer.open;
+    const setMobileOpen = useCallback(
+        (open: boolean) => setDrawer({ forPath: pathname, open }),
+        [pathname],
+    );
 
     // Prevent background scroll while the drawer is open on small screens.
     useEffect(() => {
@@ -85,7 +86,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         </svg>
                     </button>
                     <div className={styles.topbarLogo}>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src="/assets/icone_finlumia.svg" alt="" width={24} height={24} aria-hidden="true" />
                         <span className={styles.topbarLogoText} style={{ color: f.colors.brand.primary }}>
                             FINLUMIA

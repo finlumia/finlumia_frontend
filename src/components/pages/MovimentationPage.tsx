@@ -110,7 +110,8 @@ export function MovimentationPage() {
     const toggleSelect = (id: string) => {
         setSelected((prev) => {
             const s = new Set(prev);
-            s.has(id) ? s.delete(id) : s.add(id);
+            if (s.has(id)) s.delete(id);
+            else s.add(id);
             return s;
         });
     };
@@ -338,7 +339,7 @@ export function MovimentationPage() {
                                         Nenhuma movimentação encontrada.
                                     </td>
                                 </tr>
-                            ) : paged.map((tx, idx) => {
+                            ) : paged.map((tx) => {
                                 const isIncome = tx.type === "receita";
                                 const inst = bankById(tx.institution);
                                 const isSelected = selected.has(tx.id);

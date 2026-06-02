@@ -188,7 +188,6 @@ export function ReportsPage() {
 
     const border = f.colors.border.default;
     const muted  = f.colors.text.muted;
-    const primary = f.colors.brand.primary;
 
     return (
         <div className="page-responsive" style={{ fontFamily: f.typography.fontFamily.base, maxWidth: "140rem" }}>

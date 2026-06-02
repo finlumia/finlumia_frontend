@@ -70,7 +70,6 @@ export function LoginPage() {
             <div style={{ width: "100%", maxWidth: "44rem" }}>
                 {/* Logo */}
                 <div style={{ textAlign: "center", marginBottom: "2.4rem" }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src="/assets/icone_finlumia.svg" alt="Finlumia" width={44} height={44} style={{ display: "inline-block", marginBottom: "0.8rem" }} />
                     <div style={{ fontSize: "2rem", fontWeight: 700, color: primaryColor, letterSpacing: "0.05em" }}>
                         FINLUMIA

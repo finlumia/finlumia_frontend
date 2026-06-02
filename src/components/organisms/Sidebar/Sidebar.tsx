@@ -230,7 +230,8 @@ export function Sidebar({
     const toggleGroup = (id: string) => {
         setOpenGroups((prev) => {
             const next = new Set(prev);
-            next.has(id) ? next.delete(id) : next.add(id);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
             return next;
         });
     };
@@ -265,7 +266,6 @@ export function Sidebar({
             {/* ── Logo header ── */}
             <div className={styles.header} style={{ borderBottomColor: border }}>
                 <div className={styles.logoArea}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src="/assets/icone_finlumia.svg" alt="" width={26} height={26} aria-hidden="true" />
                     <span className={styles.logoText} style={{ color: primary }}>FINLUMIA</span>
                 </div>

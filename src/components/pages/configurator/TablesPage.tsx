@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { DataTable, type ColumnDef } from "../../organisms/DataTable";
 import { CrudModal } from "../../organisms/CrudModal";
 import { ConfigLayout, StatusBadge, CodeChip } from "./_shared";
-import { MOCK_TABLES, type TableRecord, type Status } from "../../../config/configurator";
+import { MOCK_TABLES, type TableRecord } from "../../../config/configurator";
 import { getFoundationByTheme } from "../../../shared/styles/tokens";
 import { useTheme } from "../../../shared/styles/theme.context";
 

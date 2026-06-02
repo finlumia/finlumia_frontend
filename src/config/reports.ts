@@ -1,4 +1,3 @@
-import { CATEGORIES } from "./transactions";
 
 export type Period = "3m" | "6m" | "12m" | "ytd";
 

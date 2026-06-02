@@ -58,18 +58,17 @@ type DonutChartProps = {
 
 export function DonutChart({ slices, centerLabel, centerValue, theme = "dark" }: DonutChartProps) {
     const f = getFoundationByTheme(theme);
-    const isDark = theme === "dark";
     const [hovered, setHovered] = useState<string | null>(null);
 
     const total = slices.reduce((s, d) => s + d.value, 0);
 
-    let cursor = 0;
-    const segments = slices.map((sl) => {
+    const segments = slices.reduce<Array<DonutSlice & { start: number; end: number }>>((acc, sl) => {
         const deg = (sl.value / total) * 360;
-        const start = cursor;
-        cursor += deg;
-        return { ...sl, start, end: cursor };
-    });
+        const start = acc.length === 0 ? 0 : acc[acc.length - 1].end;
+        const end = start + deg;
+        acc.push({ ...sl, start, end });
+        return acc;
+    }, []);
 
     const hoveredSlice = hovered ? segments.find((s) => s.id === hovered) : null;
 
@@ -85,7 +84,6 @@ export function DonutChart({ slices, centerLabel, centerValue, theme = "dark" }:
                 >
                     {segments.map((seg) => {
                         const isHov = hovered === seg.id;
-                        const scale = isHov ? 1.06 : 1;
                         return (
                             <path
                                 key={seg.id}

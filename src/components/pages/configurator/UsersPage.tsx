@@ -15,7 +15,7 @@ const ROLE_COLORS: Record<UserRole, string> = {
     viewer:   "#9DAAB8",
 };
 
-function RoleBadge({ role, f }: { role: UserRole; f: ReturnType<typeof getFoundationByTheme> }) {
+function RoleBadge({ role }: { role: UserRole }) {
     const color = ROLE_COLORS[role];
     return (
         <span style={{
@@ -58,7 +58,7 @@ export function UsersPage() {
                 </div>
             ),
         },
-        { key: "role", label: "Função", sortable: true, render: (row) => <RoleBadge role={row.role} f={f} /> },
+        { key: "role", label: "Função", sortable: true, render: (row) => <RoleBadge role={row.role} /> },
         { key: "status", label: "Status", render: (row) => <StatusBadge status={row.status} f={f} isDark={isDark} /> },
         { key: "mfa", label: "MFA", align: "center", render: (row) => <BoolBadge value={row.mfa} f={f} /> },
         { key: "lastLogin", label: "Último acesso", sortable: true, render: (row) => (
