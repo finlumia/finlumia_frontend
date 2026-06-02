@@ -20,8 +20,7 @@ RUN curl -fsSL https://rpm.nodesource.com/setup_24.x | bash - && \
     microdnf clean all && \
     rm -rf /var/cache/microdnf
 
-# Definição das variáveis de ambiente do Node.js e Next.js
-ENV NODE_ENV=development
+# Next.js define NODE_ENV=production automaticamente no build/start; não fixar "development" na imagem.
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NPM_CONFIG_CACHE=/home/finlumia/.npm
 

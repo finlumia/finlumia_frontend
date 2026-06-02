@@ -125,6 +125,7 @@ start_up() {
 
   echo "Subindo container '${NAME}' (npm install → build → start)..."
   # NODE_ENV=production no install omite devDependencies (typescript, @types/*) exigidos pelo next build.
+  # NODE_ENV=production no build é obrigatório: com "development" o Next.js falha ao gerar /404 e páginas estáticas.
   # shellcheck disable=SC2086
   docker run -d \
     --name "$NAME" \
@@ -136,7 +137,7 @@ start_up() {
     -e NEXT_TELEMETRY_DISABLED=1 \
     -e NPM_CONFIG_CACHE=/home/finlumia/.npm \
     "$IMAGE" \
-    bash -lc 'npm install --include=dev && npm run build && NODE_ENV=production npm run start -- -H 0.0.0.0 -p 3000' \
+    bash -lc 'npm install --include=dev && NODE_ENV=production npm run build && NODE_ENV=production npm run start -- -H 0.0.0.0 -p 3000' \
     || docker_fail run
 
   echo ""
