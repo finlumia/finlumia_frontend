@@ -104,7 +104,7 @@ export function LandingPage() {
                         },
                         {
                             type: "text",
-                            props: { label: "Documentacao", styleConfig: navTextStyle, theme },
+                            props: { label: "Documentação", styleConfig: navTextStyle, theme },
                         },
                     ]}
                     rightItems={[
@@ -144,7 +144,7 @@ export function LandingPage() {
                         isSvg: true,
                     }}
                     primaryAction={{
-                        label: "Comecar gratuitamente",
+                        label: "Começar gratuitamente",
                         theme,
                         variant: "primary",
                         size: "md",
@@ -156,7 +156,7 @@ export function LandingPage() {
                         },
                     }}
                     secondaryAction={{
-                        label: "Ver demonstracao",
+                        label: "Ver demonstração",
                         theme,
                         variant: "outlined",
                         size: "md",
