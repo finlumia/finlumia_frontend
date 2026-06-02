@@ -1,3 +1,21 @@
+# Dependencies
+node_modules
+
+# Next.js
+.next
+out
+
+# Production / build
+dist
+dist-ssr
+build
+*.tsbuildinfo
+
+# Environment (never commit secrets — keep .env.example tracked)
+.env
+.env.*
+!.env.example
+
 # Logs
 logs
 *.log
@@ -7,21 +25,27 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-.next
-out
-dist
-dist-ssr
-*.local
+# Testing / coverage
+coverage
+
+# Vercel / Turbo
+.vercel
+.turbo
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
 .idea
-.DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
-.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local tooling / agent settings (optional per developer)
+.claude/
+.cursor/

@@ -1,0 +1,356 @@
+{
+  "_meta": {
+    "service": "movimentation",
+    "version": "v1",
+    "description": "Lançamentos financeiros: criação, listagem, atualização, exclusão, importação de extrato e classificação automática.",
+    "baseUrls": {
+      "local":       "http://localhost:8080/movimentation",
+      "homologation":"https://api-hom.finlumia.com/movimentation",
+      "production":  "https://api.finlumia.com/movimentation"
+    }
+  },
+
+  "schemas": {
+    "TransactionType":     { "type": "enum", "enum": ["receita","despesa"] },
+    "PaymentMethod":       { "type": "enum", "enum": ["pix","credito","debito","dinheiro","ted","doc"] },
+    "InstitutionId":       { "type": "enum", "enum": ["nubank","itau","bb","bradesco","santander","picpay","inter","c6","xp"] },
+    "CategoryId":          { "type": "enum", "enum": ["alimentacao","saude","educacao","transporte","lazer","moradia","salario","vendas","tecnologia","marketing","servicos","investimento","outros"] },
+
+    "Transaction": {
+      "id":             { "type": "uuid" },
+      "userId":         { "type": "uuid" },
+      "type":           { "$ref": "TransactionType" },
+      "method":         { "$ref": "PaymentMethod" },
+      "institution":    { "$ref": "InstitutionId" },
+      "date":           { "type": "string", "format": "date", "description": "yyyy-MM-dd" },
+      "category":       { "$ref": "CategoryId" },
+      "description":    { "type": "string", "maxLength": 500 },
+      "subDescription": { "type": "string", "maxLength": 255, "nullable": true },
+      "amount":         { "type": "number", "min": 0.01, "description": "Sempre positivo — type define o sinal" },
+      "notes":          { "type": "string", "nullable": true },
+      "tags":           { "type": "array",  "items": { "type": "string" }, "nullable": true },
+      "isRecurring":    { "type": "boolean","default": false },
+      "recurringId":    { "type": "uuid",   "nullable": true, "description": "ID do grupo de recorrência" },
+      "createdAt":      { "type": "string", "format": "datetime" },
+      "updatedAt":      { "type": "string", "format": "datetime" }
+    },
+
+    "TransactionCreateBody": {
+      "type":        { "$ref": "TransactionType",  "required": true },
+      "method":      { "$ref": "PaymentMethod",    "required": true },
+      "institution": { "$ref": "InstitutionId",    "required": true },
+      "date":        { "type": "string", "format": "date",  "required": true },
+      "category":    { "$ref": "CategoryId",       "required": true },
+      "description": { "type": "string", "maxLength": 500,  "required": true },
+      "subDescription":{ "type": "string",         "required": false },
+      "amount":      { "type": "number", "min": 0.01,       "required": true },
+      "notes":       { "type": "string",            "required": false },
+      "tags":        { "type": "array", "items": { "type": "string" }, "required": false },
+      "isRecurring": { "type": "boolean",            "required": false, "default": false },
+      "recurringMonths": { "type": "number", "min": 1, "max": 36, "required": false, "description": "Quantos meses repetir (quando isRecurring=true)" }
+    },
+
+    "TransactionFilters": {
+      "page":          { "type": "number",  "default": 1 },
+      "pageSize":      { "type": "number",  "default": 10, "max": 100 },
+      "type":          { "$ref": "TransactionType",  "required": false },
+      "method":        { "$ref": "PaymentMethod",    "required": false },
+      "institution":   { "$ref": "InstitutionId",    "required": false },
+      "category":      { "$ref": "CategoryId",       "required": false },
+      "dateStart":     { "type": "string", "format": "date", "required": false },
+      "dateEnd":       { "type": "string", "format": "date", "required": false },
+      "amountMin":     { "type": "number", "required": false },
+      "amountMax":     { "type": "number", "required": false },
+      "search":        { "type": "string", "required": false, "description": "Busca em description e subDescription" },
+      "sortBy":        { "type": "enum",   "enum": ["date","amount","description","category"], "default": "date" },
+      "sortOrder":     { "type": "enum",   "enum": ["asc","desc"], "default": "desc" }
+    },
+
+    "TransactionListResponse": {
+      "data":  { "type": "array", "items": { "$ref": "Transaction" } },
+      "meta":  { "$ref": "identification#schemas.PaginationMeta" },
+      "totals": {
+        "totalIncome":   { "type": "number" },
+        "totalExpenses": { "type": "number" },
+        "netBalance":    { "type": "number" }
+      }
+    },
+
+    "ImportJobStatus": {
+      "id":          { "type": "uuid" },
+      "status":      { "type": "enum", "enum": ["pending","processing","completed","failed"] },
+      "fileName":    { "type": "string" },
+      "fileType":    { "type": "enum", "enum": ["ofx","csv","image"] },
+      "totalRows":   { "type": "number", "nullable": true },
+      "importedRows":{ "type": "number", "nullable": true },
+      "errors":      { "type": "array",  "items": { "type": "string" }, "nullable": true },
+      "createdAt":   { "type": "string", "format": "datetime" }
+    },
+
+    "OcrPreviewResult": {
+      "jobId":       { "type": "uuid" },
+      "status":      { "type": "enum", "enum": ["processing","ready","failed"] },
+      "extracted":   {
+        "description":{ "type": "string" },
+        "amount":     { "type": "number" },
+        "date":       { "type": "string", "format": "date" },
+        "category":   { "$ref": "CategoryId" },
+        "method":     { "$ref": "PaymentMethod" },
+        "confidence": { "type": "number", "description": "0-1 — confiança da extração OCR" }
+      }
+    }
+  },
+
+  "endpoints": {
+
+    "transactions": {
+      "list": {
+        "id":          "transactions.list",
+        "method":      "GET",
+        "path":        "/v1/transactions",
+        "description": "Lista paginada de transações com filtros, busca e totalizadores.",
+        "auth":        true,
+        "roles":       ["*"],
+        "request":     { "query": { "$ref": "TransactionFilters" } },
+        "responses": {
+          "200": { "body": { "$ref": "TransactionListResponse" } }
+        }
+      },
+
+      "getById": {
+        "id":          "transactions.get_by_id",
+        "method":      "GET",
+        "path":        "/v1/transactions/:id",
+        "description": "Retorna uma transação pelo ID.",
+        "auth":        true,
+        "roles":       ["*"],
+        "request": {
+          "params": { "id": { "type": "uuid", "required": true } }
+        },
+        "responses": {
+          "200": { "body": { "$ref": "Transaction" } },
+          "404": { "body": { "$ref": "identification#schemas.ErrorResponse" } }
+        }
+      },
+
+      "create": {
+        "id":          "transactions.create",
+        "method":      "POST",
+        "path":        "/v1/transactions",
+        "description": "Cria um novo lançamento. Se isRecurring=true, gera cópias para os meses seguintes.",
+        "auth":        true,
+        "roles":       ["admin","gerente","analista"],
+        "request": {
+          "body": { "$ref": "TransactionCreateBody" }
+        },
+        "responses": {
+          "201": { "description": "Lançamento(s) criado(s)", "body": { "data": { "type": "array", "items": { "$ref": "Transaction" } } } },
+          "422": { "body": { "$ref": "identification#schemas.ErrorResponse" } }
+        }
+      },
+
+      "update": {
+        "id":          "transactions.update",
+        "method":      "PUT",
+        "path":        "/v1/transactions/:id",
+        "description": "Atualiza todos os campos de um lançamento.",
+        "auth":        true,
+        "roles":       ["admin","gerente","analista"],
+        "request": {
+          "params": { "id": { "type": "uuid", "required": true } },
+          "body":   { "$ref": "TransactionCreateBody" }
+        },
+        "responses": {
+          "200": { "body": { "$ref": "Transaction" } },
+          "404": { "body": { "$ref": "identification#schemas.ErrorResponse" } }
+        }
+      },
+
+      "patch": {
+        "id":          "transactions.patch",
+        "method":      "PATCH",
+        "path":        "/v1/transactions/:id",
+        "description": "Atualiza campos específicos de um lançamento.",
+        "auth":        true,
+        "roles":       ["admin","gerente","analista"],
+        "request": {
+          "params": { "id": { "type": "uuid", "required": true } },
+          "body":   {
+            "category":    { "$ref": "CategoryId",  "required": false },
+            "description": { "type": "string",      "required": false },
+            "notes":       { "type": "string",      "required": false },
+            "tags":        { "type": "array",        "required": false }
+          }
+        },
+        "responses": {
+          "200": { "body": { "$ref": "Transaction" } }
+        }
+      },
+
+      "delete": {
+        "id":          "transactions.delete",
+        "method":      "DELETE",
+        "path":        "/v1/transactions/:id",
+        "description": "Exclui um lançamento. Lançamentos recorrentes: exclui apenas este ou todos a partir daqui.",
+        "auth":        true,
+        "roles":       ["admin","gerente"],
+        "request": {
+          "params": { "id": { "type": "uuid", "required": true } },
+          "query":  { "deleteMode": { "type": "enum", "enum": ["single","from_here","all"], "default": "single", "required": false } }
+        },
+        "responses": {
+          "204": { "description": "Excluído com sucesso" },
+          "404": { "body": { "$ref": "identification#schemas.ErrorResponse" } }
+        }
+      },
+
+      "batchDelete": {
+        "id":          "transactions.batch_delete",
+        "method":      "DELETE",
+        "path":        "/v1/transactions",
+        "description": "Exclui múltiplos lançamentos em uma única requisição.",
+        "auth":        true,
+        "roles":       ["admin","gerente"],
+        "request": {
+          "body": { "ids": { "type": "array", "items": { "type": "uuid" }, "required": true, "minItems": 1 } }
+        },
+        "responses": {
+          "200": { "body": { "deleted": { "type": "number" } } }
+        }
+      }
+    },
+
+    "import": {
+      "uploadFile": {
+        "id":          "import.upload_file",
+        "method":      "POST",
+        "path":        "/v1/transactions/import/upload",
+        "description": "Upload de arquivo OFX, CSV ou imagem. Retorna jobId para acompanhamento.",
+        "auth":        true,
+        "roles":       ["admin","gerente","analista"],
+        "request": {
+          "headers": { "Content-Type": "multipart/form-data" },
+          "body": {
+            "file":        { "type": "file",   "accept": [".ofx",".csv",".png",".jpg",".jpeg",".pdf"], "maxSizeMb": 10, "required": true },
+            "institution": { "$ref": "InstitutionId", "required": false }
+          }
+        },
+        "responses": {
+          "202": { "description": "Arquivo recebido — processamento em andamento",
+                   "body": { "$ref": "ImportJobStatus" } },
+          "400": { "description": "Formato ou tamanho inválido", "body": { "$ref": "identification#schemas.ErrorResponse" } }
+        }
+      },
+
+      "getJobStatus": {
+        "id":          "import.get_job_status",
+        "method":      "GET",
+        "path":        "/v1/transactions/import/:jobId",
+        "description": "Verifica status do processamento (polling) e retorna prévia OCR se for imagem.",
+        "auth":        true,
+        "roles":       ["*"],
+        "request": {
+          "params": { "jobId": { "type": "uuid", "required": true } }
+        },
+        "responses": {
+          "200": { "body": { "$ref": "ImportJobStatus", "ocr": { "$ref": "OcrPreviewResult", "nullable": true } } }
+        }
+      },
+
+      "confirmOcr": {
+        "id":          "import.confirm_ocr",
+        "method":      "POST",
+        "path":        "/v1/transactions/import/:jobId/confirm",
+        "description": "Usuário revisa e confirma dados extraídos via OCR antes de salvar o lançamento.",
+        "auth":        true,
+        "roles":       ["admin","gerente","analista"],
+        "request": {
+          "params": { "jobId": { "type": "uuid", "required": true } },
+          "body": {
+            "description": { "type": "string",       "required": true },
+            "amount":      { "type": "number",        "required": true },
+            "date":        { "type": "string", "format": "date", "required": true },
+            "category":    { "$ref": "CategoryId",    "required": true },
+            "method":      { "$ref": "PaymentMethod", "required": true },
+            "institution": { "$ref": "InstitutionId", "required": false }
+          }
+        },
+        "responses": {
+          "201": { "description": "Lançamento criado a partir do OCR", "body": { "$ref": "Transaction" } }
+        }
+      },
+
+      "confirmFileImport": {
+        "id":          "import.confirm_file",
+        "method":      "POST",
+        "path":        "/v1/transactions/import/:jobId/import",
+        "description": "Confirma importação de arquivo OFX/CSV após preview e validação.",
+        "auth":        true,
+        "roles":       ["admin","gerente","analista"],
+        "request": {
+          "params": { "jobId": { "type": "uuid", "required": true } },
+          "body": {
+            "institution": { "$ref": "InstitutionId", "required": false },
+            "skipDuplicates": { "type": "boolean", "default": true, "required": false }
+          }
+        },
+        "responses": {
+          "200": { "body": { "imported": { "type": "number" }, "skipped": { "type": "number" }, "errors": { "type": "number" } } }
+        }
+      }
+    },
+
+    "categories": {
+      "list": {
+        "id":          "categories.list",
+        "method":      "GET",
+        "path":        "/v1/categories",
+        "description": "Lista todas as categorias disponíveis com metadados de cor e ícone.",
+        "auth":        true,
+        "roles":       ["*"],
+        "responses": {
+          "200": {
+            "body": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "id":      { "type": "string" },
+                  "label":   { "type": "string" },
+                  "color":   { "type": "string", "format": "hex-color" },
+                  "bgColor": { "type": "string", "format": "hex-color" },
+                  "icon":    { "type": "string", "nullable": true }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "institutions": {
+      "list": {
+        "id":          "institutions.list",
+        "method":      "GET",
+        "path":        "/v1/institutions",
+        "description": "Lista instituições financeiras suportadas com cores e abreviações.",
+        "auth":        true,
+        "roles":       ["*"],
+        "responses": {
+          "200": {
+            "body": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "id":    { "type": "string" },
+                  "label": { "type": "string" },
+                  "color": { "type": "string" },
+                  "abbr":  { "type": "string" }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,96 @@
+{
+  "sidebar": {
+    "version": "1.1.0",
+    "groups": [
+      {
+        "id": "main",
+        "label": null,
+        "items": [
+          {
+            "id": "dashboard",
+            "label": "Painel",
+            "icon": "LayoutDashboard",
+            "href": "/dashboard",
+            "exact": true,
+            "children": []
+          }
+        ]
+      },
+      {
+        "id": "management",
+        "label": "Gerenciamento",
+        "items": [
+          {
+            "id": "configurator",
+            "label": "Configurador",
+            "icon": "Settings2",
+            "href": "/dashboard/configurator",
+            "exact": false,
+            "badge": null,
+            "children": [
+              { "id": "cfg-tables",      "label": "Tabelas",     "icon": "Table2",     "href": "/dashboard/configurator/tables" },
+              { "id": "cfg-fields",      "label": "Campos",      "icon": "Columns3",   "href": "/dashboard/configurator/fields" },
+              { "id": "cfg-users",       "label": "Usuários",    "icon": "Users",      "href": "/dashboard/configurator/users" },
+              { "id": "cfg-permissions", "label": "Permissões",  "icon": "ShieldCheck","href": "/dashboard/configurator/permissions" },
+              { "id": "cfg-functions",   "label": "Funções",     "icon": "Code2",      "href": "/dashboard/configurator/functions" },
+              { "id": "cfg-indexes",     "label": "Índices",     "icon": "Layers",     "href": "/dashboard/configurator/indexes" },
+              { "id": "cfg-triggers",    "label": "Triggers",    "icon": "Zap",        "href": "/dashboard/configurator/triggers" }
+            ]
+          },
+          {
+            "id": "movimentation",
+            "label": "Movimentações",
+            "icon": "ArrowLeftRight",
+            "href": "/dashboard/movimentation",
+            "exact": false,
+            "badge": null,
+            "children": [
+              { "id": "mov-transactions", "label": "Transações",          "icon": "Receipt",    "href": "/dashboard/movimentation/transactions" },
+              { "id": "mov-budget",       "label": "Orçamento",           "icon": "PiggyBank",  "href": "/dashboard/movimentation/budget" },
+              { "id": "mov-categories",   "label": "Categorias",          "icon": "Tags",       "href": "/dashboard/movimentation/categories" },
+              { "id": "mov-banks",        "label": "Bancos",              "icon": "Landmark",   "href": "/dashboard/movimentation/banks" },
+              { "id": "mov-methods",      "label": "Formas de pagamento", "icon": "CreditCard", "href": "/dashboard/movimentation/payment-methods" }
+            ]
+          },
+          {
+            "id": "reports",
+            "label": "Relatórios",
+            "icon": "BarChart3",
+            "href": "/dashboard/reports",
+            "exact": false,
+            "badge": null,
+            "children": []
+          }
+        ]
+      },
+      {
+        "id": "help",
+        "label": "Ajuda",
+        "items": [
+          {
+            "id": "support",
+            "label": "Suporte",
+            "icon": "LifeBuoy",
+            "href": "/dashboard/support",
+            "exact": false,
+            "badge": null,
+            "children": [
+              {
+                "id": "support-ticket",
+                "label": "Ticket",
+                "icon": "Ticket",
+                "href": "/dashboard/support/ticket"
+              },
+              {
+                "id": "support-docs",
+                "label": "Documentação",
+                "icon": "BookOpen",
+                "href": "/dashboard/support/documentation"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

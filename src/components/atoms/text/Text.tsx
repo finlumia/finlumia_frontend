@@ -77,7 +77,7 @@ export function Text({
         md: { fontSize: "1.6rem", lineHeight: "2.2rem" },
         lg: { fontSize: "2.4rem", lineHeight: "3rem" },
         xl: { fontSize: "3.2rem", lineHeight: "3.8rem" },
-        hero: { fontSize: "5.2rem", lineHeight: "5.6rem" },
+        hero: { fontSize: "3.4rem", lineHeight: "1.12" },
     };
 
     const styleText: React.CSSProperties = {

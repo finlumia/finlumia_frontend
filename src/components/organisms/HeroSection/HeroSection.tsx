@@ -29,12 +29,12 @@ export function HeroSection({
 
     const innerStyle: React.CSSProperties = {
         maxWidth: stylesConfig?.contentMaxWidth ?? "min(100%, var(--app-max-width))",
-        padding: stylesConfig?.sectionPadding ?? "3.2rem 1.6rem 4.8rem",
-        gap: stylesConfig?.contentGap ?? "3.2rem",
+        padding: stylesConfig?.sectionPadding ?? "2.4rem 1.6rem 3.6rem",
+        gap: stylesConfig?.contentGap ?? "2.4rem",
     };
 
     const contentStyle: React.CSSProperties = {
-        gap: stylesConfig?.titleGap ?? "1.8rem",
+        gap: stylesConfig?.titleGap ?? "1.2rem",
     };
 
     const actionsStyle: React.CSSProperties = {

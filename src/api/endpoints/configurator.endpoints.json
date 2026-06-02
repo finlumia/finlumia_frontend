@@ -1,0 +1,543 @@
+{
+  "_meta": {
+    "service": "configurator",
+    "version": "v1",
+    "description": "Administração do sistema: tabelas, campos, usuários, permissões, funções, índices e triggers do banco de dados.",
+    "roles_required": "Todos os endpoints deste serviço exigem role=admin, exceto onde indicado.",
+    "baseUrls": {
+      "local":       "http://localhost:8080/configurator",
+      "homologation":"https://api-hom.finlumia.com/configurator",
+      "production":  "https://api.finlumia.com/configurator"
+    }
+  },
+
+  "schemas": {
+    "StatusEnum":     { "type": "enum", "enum": ["ativo","inativo"] },
+    "SchemaEnum":     { "type": "enum", "enum": ["public","auth","log","cache","billing"] },
+    "RoleEnum":       { "type": "enum", "enum": ["admin","gerente","analista","viewer"] },
+    "LanguageEnum":   { "type": "enum", "enum": ["sql","plpgsql","javascript"] },
+    "VolatilityEnum": { "type": "enum", "enum": ["volatile","stable","immutable"] },
+    "IndexTypeEnum":  { "type": "enum", "enum": ["btree","hash","gin","gist","brin"] },
+    "TriggerEventEnum":  { "type": "enum", "enum": ["INSERT","UPDATE","DELETE","TRUNCATE"] },
+    "TriggerTimingEnum": { "type": "enum", "enum": ["BEFORE","AFTER","INSTEAD OF"] },
+    "DataTypeEnum": {
+      "type": "enum",
+      "enum": ["uuid","varchar","integer","bigint","boolean","timestamp","decimal","text","jsonb","serial"]
+    },
+
+    "ListParams": {
+      "page":     { "type": "number", "default": 1 },
+      "pageSize": { "type": "number", "default": 20, "max": 100 },
+      "search":   { "type": "string", "required": false },
+      "status":   { "$ref": "StatusEnum", "required": false },
+      "sortBy":   { "type": "string",  "required": false },
+      "sortOrder":{ "type": "enum", "enum": ["asc","desc"], "default": "asc" }
+    },
+
+    "TableRecord": {
+      "id":          { "type": "uuid" },
+      "name":        { "type": "string", "maxLength": 63, "pattern": "^[a-z_][a-z0-9_]*$" },
+      "schema":      { "$ref": "SchemaEnum" },
+      "rowCount":    { "type": "number" },
+      "sizeKb":      { "type": "number" },
+      "status":      { "$ref": "StatusEnum" },
+      "description": { "type": "string", "nullable": true },
+      "createdAt":   { "type": "string", "format": "datetime" },
+      "updatedAt":   { "type": "string", "format": "datetime" }
+    },
+
+    "FieldRecord": {
+      "id":           { "type": "uuid" },
+      "name":         { "type": "string", "maxLength": 63, "pattern": "^[a-z_][a-z0-9_]*$" },
+      "tableId":      { "type": "uuid" },
+      "table":        { "type": "string", "description": "Nome da tabela (join)" },
+      "dataType":     { "$ref": "DataTypeEnum" },
+      "length":       { "type": "number", "nullable": true },
+      "nullable":     { "type": "boolean" },
+      "defaultValue": { "type": "string", "nullable": true },
+      "isPrimary":    { "type": "boolean" },
+      "isForeign":    { "type": "boolean" },
+      "referencesTable": { "type": "string", "nullable": true },
+      "referencesField": { "type": "string", "nullable": true },
+      "status":       { "$ref": "StatusEnum" },
+      "createdAt":    { "type": "string", "format": "datetime" }
+    },
+
+    "AdminUser": {
+      "id":        { "type": "uuid" },
+      "name":      { "type": "string", "maxLength": 255 },
+      "email":     { "type": "string", "format": "email" },
+      "role":      { "$ref": "RoleEnum" },
+      "status":    { "type": "enum", "enum": ["ativo","inativo","pendente"] },
+      "mfa":       { "type": "boolean" },
+      "lastLogin": { "type": "string", "format": "datetime", "nullable": true },
+      "createdAt": { "type": "string", "format": "datetime" },
+      "updatedAt": { "type": "string", "format": "datetime" }
+    },
+
+    "Permission": {
+      "id":         { "type": "uuid" },
+      "module":     { "type": "string" },
+      "subsystem":  { "type": "string" },
+      "role":       { "$ref": "RoleEnum" },
+      "canRead":    { "type": "boolean" },
+      "canWrite":   { "type": "boolean" },
+      "canDelete":  { "type": "boolean" },
+      "canAdmin":   { "type": "boolean" }
+    },
+
+    "DbFunction": {
+      "id":          { "type": "uuid" },
+      "name":        { "type": "string", "maxLength": 63 },
+      "schema":      { "$ref": "SchemaEnum" },
+      "language":    { "$ref": "LanguageEnum" },
+      "returnType":  { "type": "string" },
+      "args":        { "type": "string", "nullable": true },
+      "volatility":  { "$ref": "VolatilityEnum" },
+      "body":        { "type": "string", "description": "Código-fonte da função (SQL/PL)" },
+      "description": { "type": "string", "nullable": true },
+      "status":      { "$ref": "StatusEnum" },
+      "createdAt":   { "type": "string", "format": "datetime" },
+      "updatedAt":   { "type": "string", "format": "datetime" }
+    },
+
+    "DbIndex": {
+      "id":        { "type": "uuid" },
+      "name":      { "type": "string", "maxLength": 63 },
+      "tableId":   { "type": "uuid" },
+      "table":     { "type": "string" },
+      "schema":    { "$ref": "SchemaEnum" },
+      "fields":    { "type": "string", "description": "Campos indexados separados por vírgula" },
+      "type":      { "$ref": "IndexTypeEnum" },
+      "unique":    { "type": "boolean" },
+      "partial":   { "type": "boolean" },
+      "whereClause":{ "type": "string", "nullable": true, "description": "Cláusula WHERE para índices parciais" },
+      "sizeKb":    { "type": "number" },
+      "status":    { "$ref": "StatusEnum" },
+      "createdAt": { "type": "string", "format": "datetime" }
+    },
+
+    "DbTrigger": {
+      "id":          { "type": "uuid" },
+      "name":        { "type": "string", "maxLength": 63 },
+      "tableId":     { "type": "uuid" },
+      "table":       { "type": "string" },
+      "schema":      { "$ref": "SchemaEnum" },
+      "event":       { "$ref": "TriggerEventEnum" },
+      "timing":      { "$ref": "TriggerTimingEnum" },
+      "function":    { "type": "string", "description": "Função chamada pelo trigger (schema.nome())" },
+      "enabled":     { "type": "boolean" },
+      "description": { "type": "string", "nullable": true },
+      "status":      { "$ref": "StatusEnum" },
+      "createdAt":   { "type": "string", "format": "datetime" }
+    }
+  },
+
+  "endpoints": {
+
+    "tables": {
+      "list": {
+        "id": "cfg.tables.list", "method": "GET", "path": "/v1/config/tables",
+        "description": "Lista todas as tabelas com paginação, filtro e busca.",
+        "auth": true, "roles": ["admin","gerente"],
+        "request": { "query": { "$ref": "ListParams", "schema": { "$ref": "SchemaEnum", "required": false } } },
+        "responses": {
+          "200": { "body": { "data": { "type": "array", "items": { "$ref": "TableRecord" } }, "meta": { "$ref": "identification#schemas.PaginationMeta" } } }
+        }
+      },
+      "getById": {
+        "id": "cfg.tables.get", "method": "GET", "path": "/v1/config/tables/:id",
+        "auth": true, "roles": ["admin","gerente"],
+        "request": { "params": { "id": { "type": "uuid", "required": true } } },
+        "responses": { "200": { "body": { "$ref": "TableRecord" } }, "404": {} }
+      },
+      "create": {
+        "id": "cfg.tables.create", "method": "POST", "path": "/v1/config/tables",
+        "auth": true, "roles": ["admin"],
+        "request": {
+          "body": {
+            "name":        { "type": "string", "maxLength": 63, "pattern": "^[a-z_][a-z0-9_]*$", "required": true },
+            "schema":      { "$ref": "SchemaEnum", "required": true },
+            "description": { "type": "string",  "required": false },
+            "status":      { "$ref": "StatusEnum", "required": false, "default": "ativo" }
+          }
+        },
+        "responses": { "201": { "body": { "$ref": "TableRecord" } }, "409": { "description": "Tabela já existe neste schema" } }
+      },
+      "update": {
+        "id": "cfg.tables.update", "method": "PUT", "path": "/v1/config/tables/:id",
+        "auth": true, "roles": ["admin"],
+        "request": {
+          "params": { "id": { "type": "uuid", "required": true } },
+          "body": { "description": { "type": "string" }, "status": { "$ref": "StatusEnum" } }
+        },
+        "responses": { "200": { "body": { "$ref": "TableRecord" } } }
+      },
+      "delete": {
+        "id": "cfg.tables.delete", "method": "DELETE", "path": "/v1/config/tables/:id",
+        "auth": true, "roles": ["admin"],
+        "request": { "params": { "id": { "type": "uuid", "required": true } } },
+        "responses": { "204": {}, "409": { "description": "Tabela possui campos ou índices ativos — exclua-os primeiro" } }
+      }
+    },
+
+    "fields": {
+      "list": {
+        "id": "cfg.fields.list", "method": "GET", "path": "/v1/config/fields",
+        "auth": true, "roles": ["admin","gerente"],
+        "request": { "query": { "$ref": "ListParams", "tableId": { "type": "uuid", "required": false } } },
+        "responses": { "200": { "body": { "data": { "type": "array", "items": { "$ref": "FieldRecord" } }, "meta": {} } } }
+      },
+      "getById": {
+        "id": "cfg.fields.get", "method": "GET", "path": "/v1/config/fields/:id",
+        "auth": true, "roles": ["admin","gerente"],
+        "request": { "params": { "id": { "type": "uuid" } } },
+        "responses": { "200": { "body": { "$ref": "FieldRecord" } } }
+      },
+      "create": {
+        "id": "cfg.fields.create", "method": "POST", "path": "/v1/config/fields",
+        "auth": true, "roles": ["admin"],
+        "request": {
+          "body": {
+            "name":              { "type": "string", "maxLength": 63, "required": true },
+            "tableId":           { "type": "uuid",   "required": true },
+            "dataType":          { "$ref": "DataTypeEnum", "required": true },
+            "length":            { "type": "number", "required": false },
+            "nullable":          { "type": "boolean","default": true, "required": false },
+            "defaultValue":      { "type": "string", "required": false },
+            "isPrimary":         { "type": "boolean","default": false },
+            "isForeign":         { "type": "boolean","default": false },
+            "referencesTable":   { "type": "string", "required": false },
+            "referencesField":   { "type": "string", "required": false },
+            "status":            { "$ref": "StatusEnum", "default": "ativo" }
+          }
+        },
+        "responses": { "201": { "body": { "$ref": "FieldRecord" } }, "409": { "description": "Campo já existe na tabela" } }
+      },
+      "update": {
+        "id": "cfg.fields.update", "method": "PUT", "path": "/v1/config/fields/:id",
+        "auth": true, "roles": ["admin"],
+        "request": { "params": { "id": { "type": "uuid" } }, "body": { "$ref": "FieldRecord" } },
+        "responses": { "200": { "body": { "$ref": "FieldRecord" } } }
+      },
+      "delete": {
+        "id": "cfg.fields.delete", "method": "DELETE", "path": "/v1/config/fields/:id",
+        "auth": true, "roles": ["admin"],
+        "request": { "params": { "id": { "type": "uuid" } } },
+        "responses": { "204": {}, "409": { "description": "Campo referenciado por índice ou FK ativo" } }
+      }
+    },
+
+    "users": {
+      "list": {
+        "id": "cfg.users.list", "method": "GET", "path": "/v1/config/users",
+        "auth": true, "roles": ["admin","gerente"],
+        "request": { "query": { "$ref": "ListParams", "role": { "$ref": "RoleEnum", "required": false } } },
+        "responses": { "200": { "body": { "data": { "type": "array", "items": { "$ref": "AdminUser" } }, "meta": {} } } }
+      },
+      "getById": {
+        "id": "cfg.users.get", "method": "GET", "path": "/v1/config/users/:id",
+        "auth": true, "roles": ["admin","gerente"],
+        "request": { "params": { "id": { "type": "uuid" } } },
+        "responses": { "200": { "body": { "$ref": "AdminUser" } } }
+      },
+      "create": {
+        "id": "cfg.users.create", "method": "POST", "path": "/v1/config/users",
+        "auth": true, "roles": ["admin"],
+        "request": {
+          "body": {
+            "name":   { "type": "string",  "required": true },
+            "email":  { "type": "string",  "format": "email", "required": true },
+            "role":   { "$ref": "RoleEnum","required": true },
+            "status": { "type": "enum", "enum": ["ativo","pendente"], "default": "pendente" },
+            "mfa":    { "type": "boolean", "default": false },
+            "sendInvite": { "type": "boolean", "default": true, "description": "Envia e-mail de convite ao criar" }
+          }
+        },
+        "responses": { "201": { "body": { "$ref": "AdminUser" } }, "409": { "description": "E-mail já cadastrado" } }
+      },
+      "update": {
+        "id": "cfg.users.update", "method": "PUT", "path": "/v1/config/users/:id",
+        "auth": true, "roles": ["admin"],
+        "request": {
+          "params": { "id": { "type": "uuid" } },
+          "body": { "name": {}, "role": {}, "status": {}, "mfa": {} }
+        },
+        "responses": { "200": { "body": { "$ref": "AdminUser" } } }
+      },
+      "delete": {
+        "id": "cfg.users.delete", "method": "DELETE", "path": "/v1/config/users/:id",
+        "auth": true, "roles": ["admin"],
+        "request": { "params": { "id": { "type": "uuid" } } },
+        "responses": { "204": {}, "403": { "description": "Não é possível excluir o próprio usuário" } }
+      },
+      "toggleStatus": {
+        "id": "cfg.users.toggle_status", "method": "PATCH", "path": "/v1/config/users/:id/status",
+        "description": "Ativa ou desativa um usuário sem exclui-lo.",
+        "auth": true, "roles": ["admin"],
+        "request": {
+          "params": { "id": { "type": "uuid" } },
+          "body":   { "status": { "type": "enum", "enum": ["ativo","inativo"], "required": true } }
+        },
+        "responses": { "200": { "body": { "$ref": "AdminUser" } } }
+      },
+      "adminResetPassword": {
+        "id": "cfg.users.admin_reset_password", "method": "POST", "path": "/v1/config/users/:id/reset-password",
+        "description": "Admin força redefinição de senha — envia link para o e-mail do usuário.",
+        "auth": true, "roles": ["admin"],
+        "request": { "params": { "id": { "type": "uuid" } } },
+        "responses": { "200": { "body": { "message": { "type": "string" } } } }
+      }
+    },
+
+    "permissions": {
+      "list": {
+        "id": "cfg.permissions.list", "method": "GET", "path": "/v1/config/permissions",
+        "auth": true, "roles": ["admin"],
+        "request": { "query": { "$ref": "ListParams", "module": { "type": "string", "required": false }, "role": { "$ref": "RoleEnum", "required": false } } },
+        "responses": { "200": { "body": { "data": { "type": "array", "items": { "$ref": "Permission" } }, "meta": {} } } }
+      },
+      "getMatrix": {
+        "id": "cfg.permissions.get_matrix", "method": "GET", "path": "/v1/config/permissions/matrix",
+        "description": "Retorna a matriz completa de permissões agrupada por módulo e função.",
+        "auth": true, "roles": ["admin"],
+        "responses": {
+          "200": {
+            "body": {
+              "matrix": {
+                "type": "object",
+                "description": "Chave: '{module}:{subsystem}', valor: objeto com roles e suas permissões"
+              }
+            }
+          }
+        }
+      },
+      "create": {
+        "id": "cfg.permissions.create", "method": "POST", "path": "/v1/config/permissions",
+        "auth": true, "roles": ["admin"],
+        "request": {
+          "body": {
+            "module":    { "type": "string",  "required": true },
+            "subsystem": { "type": "string",  "required": true },
+            "role":      { "$ref": "RoleEnum","required": true },
+            "canRead":   { "type": "boolean", "required": true },
+            "canWrite":  { "type": "boolean", "required": true },
+            "canDelete": { "type": "boolean", "required": true },
+            "canAdmin":  { "type": "boolean", "required": true }
+          }
+        },
+        "responses": { "201": { "body": { "$ref": "Permission" } }, "409": { "description": "Permissão já existe para este módulo/role" } }
+      },
+      "update": {
+        "id": "cfg.permissions.update", "method": "PUT", "path": "/v1/config/permissions/:id",
+        "auth": true, "roles": ["admin"],
+        "request": {
+          "params": { "id": { "type": "uuid" } },
+          "body": { "canRead":{}, "canWrite":{}, "canDelete":{}, "canAdmin":{} }
+        },
+        "responses": { "200": { "body": { "$ref": "Permission" } } }
+      },
+      "batchUpdate": {
+        "id": "cfg.permissions.batch_update", "method": "POST", "path": "/v1/config/permissions/batch",
+        "description": "Atualiza múltiplas permissões de uma vez — útil para salvar a matriz inteira.",
+        "auth": true, "roles": ["admin"],
+        "request": {
+          "body": {
+            "permissions": { "type": "array", "items": { "$ref": "Permission" }, "required": true }
+          }
+        },
+        "responses": { "200": { "body": { "updated": { "type": "number" } } } }
+      },
+      "delete": {
+        "id": "cfg.permissions.delete", "method": "DELETE", "path": "/v1/config/permissions/:id",
+        "auth": true, "roles": ["admin"],
+        "request": { "params": { "id": { "type": "uuid" } } },
+        "responses": { "204": {} }
+      }
+    },
+
+    "functions": {
+      "list": {
+        "id": "cfg.functions.list", "method": "GET", "path": "/v1/config/functions",
+        "auth": true, "roles": ["admin"],
+        "request": { "query": { "$ref": "ListParams", "schema": { "$ref": "SchemaEnum", "required": false }, "language": { "$ref": "LanguageEnum", "required": false } } },
+        "responses": { "200": { "body": { "data": { "type": "array", "items": { "$ref": "DbFunction" } }, "meta": {} } } }
+      },
+      "getById": {
+        "id": "cfg.functions.get", "method": "GET", "path": "/v1/config/functions/:id",
+        "auth": true, "roles": ["admin"],
+        "request": { "params": { "id": { "type": "uuid" } } },
+        "responses": { "200": { "body": { "$ref": "DbFunction" } } }
+      },
+      "create": {
+        "id": "cfg.functions.create", "method": "POST", "path": "/v1/config/functions",
+        "auth": true, "roles": ["admin"],
+        "request": {
+          "body": {
+            "name":        { "type": "string",   "required": true },
+            "schema":      { "$ref": "SchemaEnum","required": true },
+            "language":    { "$ref": "LanguageEnum","required": true },
+            "returnType":  { "type": "string",   "required": true },
+            "args":        { "type": "string",   "required": false },
+            "volatility":  { "$ref": "VolatilityEnum","required": true },
+            "body":        { "type": "string",   "required": true, "description": "Código-fonte da função" },
+            "description": { "type": "string",   "required": false },
+            "status":      { "$ref": "StatusEnum","default": "ativo" }
+          }
+        },
+        "responses": { "201": { "body": { "$ref": "DbFunction" } } }
+      },
+      "update": {
+        "id": "cfg.functions.update", "method": "PUT", "path": "/v1/config/functions/:id",
+        "auth": true, "roles": ["admin"],
+        "request": { "params": { "id": {} }, "body": { "$ref": "DbFunction" } },
+        "responses": { "200": { "body": { "$ref": "DbFunction" } } }
+      },
+      "delete": {
+        "id": "cfg.functions.delete", "method": "DELETE", "path": "/v1/config/functions/:id",
+        "auth": true, "roles": ["admin"],
+        "request": { "params": { "id": {} } },
+        "responses": { "204": {}, "409": { "description": "Função referenciada por trigger ativo" } }
+      },
+      "test": {
+        "id": "cfg.functions.test", "method": "POST", "path": "/v1/config/functions/:id/test",
+        "description": "Executa a função em sandbox com argumentos de teste — retorna resultado ou erro.",
+        "auth": true, "roles": ["admin"],
+        "request": {
+          "params": { "id": { "type": "uuid" } },
+          "body":   { "args": { "type": "object", "description": "Argumentos nomeados para a função", "required": false } }
+        },
+        "responses": {
+          "200": { "body": { "result": {}, "executionMs": { "type": "number" } } },
+          "400": { "body": { "error": { "type": "string" }, "detail": { "type": "string" } } }
+        }
+      }
+    },
+
+    "indexes": {
+      "list": {
+        "id": "cfg.indexes.list", "method": "GET", "path": "/v1/config/indexes",
+        "auth": true, "roles": ["admin","gerente"],
+        "request": { "query": { "$ref": "ListParams", "tableId": { "type": "uuid", "required": false }, "type": { "$ref": "IndexTypeEnum", "required": false } } },
+        "responses": { "200": { "body": { "data": { "type": "array", "items": { "$ref": "DbIndex" } }, "meta": {} } } }
+      },
+      "getById": {
+        "id": "cfg.indexes.get", "method": "GET", "path": "/v1/config/indexes/:id",
+        "auth": true, "roles": ["admin","gerente"],
+        "request": { "params": { "id": {} } },
+        "responses": { "200": { "body": { "$ref": "DbIndex" } } }
+      },
+      "create": {
+        "id": "cfg.indexes.create", "method": "POST", "path": "/v1/config/indexes",
+        "auth": true, "roles": ["admin"],
+        "request": {
+          "body": {
+            "name":        { "type": "string",    "required": true },
+            "tableId":     { "type": "uuid",      "required": true },
+            "schema":      { "$ref": "SchemaEnum","required": true },
+            "fields":      { "type": "string",    "required": true },
+            "type":        { "$ref": "IndexTypeEnum","required": true },
+            "unique":      { "type": "boolean",   "default": false },
+            "partial":     { "type": "boolean",   "default": false },
+            "whereClause": { "type": "string",    "required": false },
+            "status":      { "$ref": "StatusEnum","default": "ativo" }
+          }
+        },
+        "responses": { "201": { "body": { "$ref": "DbIndex" } }, "409": { "description": "Índice com este nome já existe" } }
+      },
+      "update": {
+        "id": "cfg.indexes.update", "method": "PUT", "path": "/v1/config/indexes/:id",
+        "auth": true, "roles": ["admin"],
+        "request": { "params": { "id": {} }, "body": { "whereClause":{}, "status":{} } },
+        "responses": { "200": { "body": { "$ref": "DbIndex" } } }
+      },
+      "delete": {
+        "id": "cfg.indexes.delete", "method": "DELETE", "path": "/v1/config/indexes/:id",
+        "auth": true, "roles": ["admin"],
+        "request": { "params": { "id": {} } },
+        "responses": { "204": {} }
+      },
+      "rebuild": {
+        "id": "cfg.indexes.rebuild", "method": "POST", "path": "/v1/config/indexes/:id/rebuild",
+        "description": "Reconstrói o índice (REINDEX CONCURRENTLY) — resposta assíncrona.",
+        "auth": true, "roles": ["admin"],
+        "request": { "params": { "id": {} } },
+        "responses": {
+          "202": { "body": { "jobId": { "type": "uuid" }, "estimatedSeconds": { "type": "number" } } }
+        }
+      },
+      "getStats": {
+        "id": "cfg.indexes.get_stats", "method": "GET", "path": "/v1/config/indexes/:id/stats",
+        "description": "Retorna estatísticas de uso do índice (hits, reads, size atual).",
+        "auth": true, "roles": ["admin","gerente"],
+        "request": { "params": { "id": {} } },
+        "responses": {
+          "200": {
+            "body": {
+              "sizeKb":    { "type": "number" },
+              "scans":     { "type": "number" },
+              "tupleReads":{ "type": "number" },
+              "blksRead":  { "type": "number" },
+              "lastUsed":  { "type": "string", "format": "datetime", "nullable": true }
+            }
+          }
+        }
+      }
+    },
+
+    "triggers": {
+      "list": {
+        "id": "cfg.triggers.list", "method": "GET", "path": "/v1/config/triggers",
+        "auth": true, "roles": ["admin"],
+        "request": { "query": { "$ref": "ListParams", "tableId": { "type": "uuid", "required": false }, "event": { "$ref": "TriggerEventEnum", "required": false }, "enabled": { "type": "boolean", "required": false } } },
+        "responses": { "200": { "body": { "data": { "type": "array", "items": { "$ref": "DbTrigger" } }, "meta": {} } } }
+      },
+      "getById": {
+        "id": "cfg.triggers.get", "method": "GET", "path": "/v1/config/triggers/:id",
+        "auth": true, "roles": ["admin"],
+        "request": { "params": { "id": {} } },
+        "responses": { "200": { "body": { "$ref": "DbTrigger" } } }
+      },
+      "create": {
+        "id": "cfg.triggers.create", "method": "POST", "path": "/v1/config/triggers",
+        "auth": true, "roles": ["admin"],
+        "request": {
+          "body": {
+            "name":        { "type": "string",       "required": true },
+            "tableId":     { "type": "uuid",         "required": true },
+            "schema":      { "$ref": "SchemaEnum",   "required": true },
+            "event":       { "$ref": "TriggerEventEnum","required": true },
+            "timing":      { "$ref": "TriggerTimingEnum","required": true },
+            "function":    { "type": "string",       "required": true },
+            "enabled":     { "type": "boolean",      "default": true },
+            "description": { "type": "string",       "required": false },
+            "status":      { "$ref": "StatusEnum",   "default": "ativo" }
+          }
+        },
+        "responses": { "201": { "body": { "$ref": "DbTrigger" } }, "409": { "description": "Trigger com este nome já existe na tabela" } }
+      },
+      "update": {
+        "id": "cfg.triggers.update", "method": "PUT", "path": "/v1/config/triggers/:id",
+        "auth": true, "roles": ["admin"],
+        "request": { "params": { "id": {} }, "body": { "function":{}, "enabled":{}, "description":{}, "status":{} } },
+        "responses": { "200": { "body": { "$ref": "DbTrigger" } } }
+      },
+      "toggle": {
+        "id": "cfg.triggers.toggle", "method": "PATCH", "path": "/v1/config/triggers/:id/toggle",
+        "description": "Habilita ou desabilita o trigger sem excluir.",
+        "auth": true, "roles": ["admin"],
+        "request": {
+          "params": { "id": {} },
+          "body":   { "enabled": { "type": "boolean", "required": true } }
+        },
+        "responses": { "200": { "body": { "$ref": "DbTrigger" } } }
+      },
+      "delete": {
+        "id": "cfg.triggers.delete", "method": "DELETE", "path": "/v1/config/triggers/:id",
+        "auth": true, "roles": ["admin"],
+        "request": { "params": { "id": {} } },
+        "responses": { "204": {} }
+      }
+    }
+  }
+}

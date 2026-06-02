@@ -5,12 +5,12 @@
   --header-center-gap: 1.2rem;
   --header-right-gap: 0.8rem;
 
-  --logo-font-size: 1.8rem;
-  --nav-font-size: 1.2rem;
+  --logo-font-size: 1.5rem;
+  --nav-font-size: 1.1rem;
 
-  --button-height: 3.2rem;
-  --button-font-size: 1.2rem;
-  --button-padding-inline: 1.2rem;
+  --button-height: 2.8rem;
+  --button-font-size: 1.1rem;
+  --button-padding-inline: 1rem;
   --button-radius: 0.8rem;
 
   --header-nav-display: none;
@@ -25,12 +25,12 @@
     --header-center-gap: 1.8rem;
     --header-right-gap: 1rem;
 
-    --logo-font-size: 2.2rem;
-    --nav-font-size: 1.3rem;
+    --logo-font-size: 1.8rem;
+    --nav-font-size: 1.2rem;
 
-    --button-height: 3.4rem;
-    --button-font-size: 1.3rem;
-    --button-padding-inline: 1.4rem;
+    --button-height: 3rem;
+    --button-font-size: 1.2rem;
+    --button-padding-inline: 1.2rem;
 
     --header-nav-display: inline-flex;
     --header-secondary-action-display: inline-flex;
@@ -45,11 +45,73 @@
     --header-center-gap: 2.8rem;
     --header-right-gap: 1.2rem;
 
-    --logo-font-size: 2.8rem;
-    --nav-font-size: 1.4rem;
+    --logo-font-size: 2.2rem;
+    --nav-font-size: 1.25rem;
 
-    --button-height: 3.8rem;
-    --button-font-size: 1.4rem;
-    --button-padding-inline: 2rem;
+    --button-height: 3.2rem;
+    --button-font-size: 1.25rem;
+    --button-padding-inline: 1.6rem;
   }
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Responsive layout utilities (shared across dashboard pages)
+   ────────────────────────────────────────────────────────────────────────── */
+
+/* Page wrapper: padding scales up with the viewport.
+   Content is horizontally centered within the available area
+   (sidebar offset is handled by the dashboard shell). */
+.page-responsive {
+  width: 100%;
+  max-width: var(--page-max-width, 120rem);
+  margin-inline: auto;
+  box-sizing: border-box;
+  padding: 1.6rem;
+}
+
+@media (min-width: 640px) {
+  .page-responsive {
+    padding: 2rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .page-responsive {
+    padding: 2.4rem;
+  }
+}
+
+/* Multi-column grid that stacks to a single column on mobile/tablet.
+   Set the desktop template inline via `--grid-cols`, e.g.
+   style={{ "--grid-cols": "1fr 1.4fr" }} */
+.grid-responsive {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.6rem;
+}
+
+@media (min-width: 1024px) {
+  .grid-responsive {
+    grid-template-columns: var(--grid-cols, 1fr 1fr);
+  }
+}
+
+/* Two-up grid that stacks earlier (good for compact paired fields).
+   Stacks below 640px, side-by-side above. */
+.grid-pair {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+}
+
+@media (min-width: 640px) {
+  .grid-pair {
+    grid-template-columns: var(--grid-cols, 1fr 1fr);
+  }
+}
+
+/* Horizontal scroll container for wide content (tables, tab bars) */
+.scroll-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }

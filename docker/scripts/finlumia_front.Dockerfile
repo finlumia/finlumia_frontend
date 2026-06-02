@@ -56,8 +56,10 @@ RUN rm -rf \
     /root/.bash_history
 
 RUN useradd -m -s /bin/bash finlumia \
-    && mkdir -p /home/finlumia/.npm \
-    && chown -R finlumia:finlumia /home/finlumia
+    && mkdir -p /home/finlumia/.npm /workspace \
+    && chown -R finlumia:finlumia /home/finlumia /workspace
+
+WORKDIR /workspace
 
 EXPOSE 3000
 

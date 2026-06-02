@@ -1,0 +1,279 @@
+.root {
+    display: flex;
+    flex-direction: column;
+    gap: 1.2rem;
+    font-family: inherit;
+}
+
+.shell {
+    display: flex;
+    border: 1px solid var(--period-border, #e2e8f0);
+    border-radius: 1rem;
+    overflow: hidden;
+    background: var(--period-surface, #fff);
+}
+
+.sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 1.2rem;
+    min-width: 14rem;
+    border-right: 1px solid var(--period-border, #e2e8f0);
+    background: var(--period-sidebar, #f8fafc);
+}
+
+.sidebarLabel {
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--period-muted, #64748b);
+    margin-bottom: 0.4rem;
+}
+
+.modeBtn {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 0.8rem 1rem;
+    border: 1.5px solid transparent;
+    border-radius: 0.8rem;
+    background: transparent;
+    cursor: pointer;
+    font-size: 1.3rem;
+    font-weight: 500;
+    font-family: inherit;
+    color: var(--period-text, #334155);
+    text-align: left;
+    transition: all 0.15s ease;
+}
+
+.modeBtn:hover {
+    background: var(--period-hover, rgba(15, 118, 110, 0.08));
+}
+
+.modeBtnActive {
+    border-color: var(--period-primary, #0f766e);
+    background: var(--period-active-bg, rgba(15, 118, 110, 0.1));
+    color: var(--period-primary, #0f766e);
+    font-weight: 600;
+}
+
+.rangeSummary {
+    margin-top: auto;
+    padding-top: 1.2rem;
+    border-top: 1px solid var(--period-border, #e2e8f0);
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+}
+
+.rangeRow {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.rangeRowLabel {
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: var(--period-muted, #64748b);
+}
+
+.rangeRowValue {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--period-text, #334155);
+}
+
+.calendars {
+    flex: 1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.6rem;
+    padding: 1.6rem;
+    justify-content: center;
+}
+
+.calendar {
+    min-width: 24rem;
+}
+
+.calHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+}
+
+.calTitle {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--period-text, #334155);
+    text-transform: capitalize;
+}
+
+.navBtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 3rem;
+    height: 3rem;
+    border: none;
+    border-radius: 0.6rem;
+    background: transparent;
+    cursor: pointer;
+    color: var(--period-muted, #64748b);
+    font-family: inherit;
+}
+
+.navBtn:hover {
+    background: var(--period-hover, rgba(15, 118, 110, 0.08));
+    color: var(--period-primary, #0f766e);
+}
+
+.weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0.2rem;
+    margin-bottom: 0.4rem;
+}
+
+.weekday {
+    text-align: center;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--period-muted, #64748b);
+    padding: 0.4rem 0;
+}
+
+.days {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0.2rem;
+}
+
+.dayBtn {
+    aspect-ratio: 1;
+    min-height: 3.2rem;
+    border: none;
+    border-radius: 999px;
+    background: transparent;
+    cursor: pointer;
+    font-size: 1.25rem;
+    font-family: inherit;
+    color: var(--period-text, #334155);
+    transition: all 0.12s ease;
+}
+
+.dayBtn:hover:not(:disabled) {
+    background: var(--period-hover, rgba(15, 118, 110, 0.12));
+}
+
+.dayBtnOther {
+    color: var(--period-muted, #94a3b8);
+}
+
+.dayBtnSelected {
+    background: var(--period-primary, #0f766e) !important;
+    color: #fff !important;
+    font-weight: 700;
+}
+
+.dayBtnInRange {
+    background: var(--period-range-bg, rgba(15, 118, 110, 0.15));
+    border-radius: 0;
+}
+
+.dayBtnRangeStart {
+    border-radius: 999px 0 0 999px;
+}
+
+.dayBtnRangeEnd {
+    border-radius: 0 999px 999px 0;
+}
+
+.monthGrid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.8rem;
+    padding: 1.6rem;
+    flex: 1;
+    align-content: start;
+}
+
+.monthBtn {
+    padding: 1rem;
+    border: 1.5px solid var(--period-border, #e2e8f0);
+    border-radius: 0.8rem;
+    background: transparent;
+    cursor: pointer;
+    font-size: 1.3rem;
+    font-family: inherit;
+    color: var(--period-text, #334155);
+    text-transform: capitalize;
+    transition: all 0.12s ease;
+}
+
+.monthBtn:hover {
+    border-color: var(--period-primary, #0f766e);
+    background: var(--period-hover, rgba(15, 118, 110, 0.08));
+}
+
+.monthBtnActive {
+    border-color: var(--period-primary, #0f766e);
+    background: var(--period-active-bg, rgba(15, 118, 110, 0.15));
+    color: var(--period-primary, #0f766e);
+    font-weight: 700;
+}
+
+.yearNav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1.6rem;
+    padding: 1.2rem 1.6rem 0;
+    width: 100%;
+}
+
+.yearLabel {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--period-text, #334155);
+    min-width: 5rem;
+    text-align: center;
+}
+
+.error {
+    font-size: 1.1rem;
+    color: var(--period-error, #dc2626);
+}
+
+@media (max-width: 640px) {
+    .shell {
+        flex-direction: column;
+    }
+
+    .sidebar {
+        border-right: none;
+        border-bottom: 1px solid var(--period-border, #e2e8f0);
+        flex-direction: row;
+        flex-wrap: wrap;
+        min-width: unset;
+    }
+
+    .rangeSummary {
+        display: none;
+    }
+
+    .calendars {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .calendar {
+        min-width: unset;
+    }
+}

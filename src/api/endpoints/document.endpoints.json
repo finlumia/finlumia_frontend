@@ -1,0 +1,312 @@
+{
+  "_meta": {
+    "service": "document",
+    "version": "v1",
+    "description": "Relatórios analíticos, insights automáticos e exportação de dados (PDF, CSV, Excel).",
+    "baseUrls": {
+      "local":       "http://localhost:8080/document",
+      "homologation":"https://api-hom.finlumia.com/document",
+      "production":  "https://api.finlumia.com/document"
+    }
+  },
+
+  "schemas": {
+    "Period": {
+      "type": "enum",
+      "enum": ["3m","6m","12m","ytd","custom"],
+      "description": "Atalhos de período. Use 'custom' junto com periodStart e periodEnd."
+    },
+
+    "PeriodParams": {
+      "period":      { "$ref": "Period",  "required": false, "default": "6m" },
+      "periodStart": { "type": "string",  "format": "date", "required": false, "description": "Obrigatório quando period=custom" },
+      "periodEnd":   { "type": "string",  "format": "date", "required": false, "description": "Obrigatório quando period=custom" }
+    },
+
+    "MonthlySummary": {
+      "month":       { "type": "string",  "description": "Jan, Fev, Mar..." },
+      "year":        { "type": "number" },
+      "receitas":    { "type": "number" },
+      "despesas":    { "type": "number" },
+      "saldo":       { "type": "number" },
+      "patrimonio":  { "type": "number" }
+    },
+
+    "CategoryBreakdown": {
+      "categoryId":  { "type": "string" },
+      "label":       { "type": "string" },
+      "color":       { "type": "string" },
+      "total":       { "type": "number" },
+      "percent":     { "type": "number" },
+      "trend":       { "type": "number", "description": "Variação % vs período anterior (negativo = redução)" },
+      "transactions":{ "type": "number", "description": "Qtd de lançamentos nesta categoria" }
+    },
+
+    "InstitutionBreakdown": {
+      "id":          { "type": "string" },
+      "label":       { "type": "string" },
+      "color":       { "type": "string" },
+      "abbr":        { "type": "string" },
+      "total":       { "type": "number" },
+      "percent":     { "type": "number" }
+    },
+
+    "InsightType":   { "type": "enum", "enum": ["positive","negative","neutral","alert"] },
+
+    "Insight": {
+      "id":          { "type": "uuid" },
+      "type":        { "$ref": "InsightType" },
+      "title":       { "type": "string" },
+      "description": { "type": "string" },
+      "icon":        { "type": "string" },
+      "relatedCategory": { "type": "string", "nullable": true },
+      "delta":       { "type": "number",  "nullable": true, "description": "Variação % que originou o insight" },
+      "generatedAt": { "type": "string",  "format": "datetime" }
+    },
+
+    "KpiSummary": {
+      "totalReceitas":          { "type": "number" },
+      "totalDespesas":          { "type": "number" },
+      "saldoLiquido":           { "type": "number" },
+      "taxaPoupanca":           { "type": "number", "description": "% do total recebido que foi poupado" },
+      "patrimonioAtual":        { "type": "number" },
+      "crescimentoPatrimonio":  { "type": "number", "description": "% de crescimento no período" },
+      "periodMonths":           { "type": "number" }
+    },
+
+    "ExportFormat": {
+      "type": "enum",
+      "enum": ["pdf","csv","xlsx"],
+      "description": "Formato de exportação do relatório"
+    }
+  },
+
+  "endpoints": {
+
+    "reports": {
+      "getKPIs": {
+        "id":          "reports.get_kpis",
+        "method":      "GET",
+        "path":        "/v1/reports/kpis",
+        "description": "Retorna KPIs agregados do período selecionado.",
+        "auth":        true,
+        "roles":       ["*"],
+        "request":     { "query": { "$ref": "PeriodParams" } },
+        "responses": {
+          "200": { "body": { "$ref": "KpiSummary" } }
+        }
+      },
+
+      "getCashFlow": {
+        "id":          "reports.get_cash_flow",
+        "method":      "GET",
+        "path":        "/v1/reports/cash-flow",
+        "description": "Série mensal de receitas, despesas e saldo para o gráfico de fluxo de caixa.",
+        "auth":        true,
+        "roles":       ["*"],
+        "request":     { "query": { "$ref": "PeriodParams" } },
+        "responses": {
+          "200": {
+            "body": {
+              "data": { "type": "array", "items": { "$ref": "MonthlySummary" } },
+              "kpis": { "$ref": "KpiSummary" }
+            }
+          }
+        }
+      },
+
+      "getByCategory": {
+        "id":          "reports.get_by_category",
+        "method":      "GET",
+        "path":        "/v1/reports/by-category",
+        "description": "Breakdown de despesas por categoria com % de participação e tendência vs período anterior.",
+        "auth":        true,
+        "roles":       ["*"],
+        "request": {
+          "query": {
+            "$ref": "PeriodParams",
+            "type": { "type": "enum", "enum": ["receita","despesa","all"], "default": "despesa" }
+          }
+        },
+        "responses": {
+          "200": {
+            "body": {
+              "data":  { "type": "array", "items": { "$ref": "CategoryBreakdown" } },
+              "total": { "type": "number" }
+            }
+          }
+        }
+      },
+
+      "getByInstitution": {
+        "id":          "reports.get_by_institution",
+        "method":      "GET",
+        "path":        "/v1/reports/by-institution",
+        "description": "Distribuição de gastos/receitas por instituição financeira.",
+        "auth":        true,
+        "roles":       ["*"],
+        "request":     { "query": { "$ref": "PeriodParams" } },
+        "responses": {
+          "200": {
+            "body": {
+              "data":  { "type": "array", "items": { "$ref": "InstitutionBreakdown" } },
+              "total": { "type": "number" }
+            }
+          }
+        }
+      },
+
+      "getNetWorth": {
+        "id":          "reports.get_net_worth",
+        "method":      "GET",
+        "path":        "/v1/reports/net-worth",
+        "description": "Série histórica do patrimônio líquido acumulado mês a mês.",
+        "auth":        true,
+        "roles":       ["*"],
+        "request":     { "query": { "$ref": "PeriodParams" } },
+        "responses": {
+          "200": {
+            "body": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "month":    { "type": "string" },
+                  "year":     { "type": "number" },
+                  "patrimonio":{ "type": "number" }
+                }
+              },
+              "current":  { "type": "number" },
+              "initial":  { "type": "number" },
+              "growth":   { "type": "number", "description": "% crescimento no período" }
+            }
+          }
+        }
+      },
+
+      "getMonthlyComparison": {
+        "id":          "reports.get_monthly_comparison",
+        "method":      "GET",
+        "path":        "/v1/reports/monthly-comparison",
+        "description": "Dados mensais agrupados para o gráfico de barras comparativo.",
+        "auth":        true,
+        "roles":       ["*"],
+        "request":     { "query": { "$ref": "PeriodParams" } },
+        "responses": {
+          "200": {
+            "body": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "label":    { "type": "string", "description": "Ex: Jan, Fev" },
+                  "receitas": { "type": "number" },
+                  "despesas": { "type": "number" },
+                  "saldo":    { "type": "number" }
+                }
+              }
+            }
+          }
+        }
+      },
+
+      "getInsights": {
+        "id":          "reports.get_insights",
+        "method":      "GET",
+        "path":        "/v1/reports/insights",
+        "description": "Lista de insights automáticos gerados pela engine de análise.",
+        "auth":        true,
+        "roles":       ["*"],
+        "request": {
+          "query": {
+            "$ref": "PeriodParams",
+            "limit":   { "type": "number", "default": 5, "max": 20 },
+            "types":   { "type": "array",  "items": { "$ref": "InsightType" }, "required": false }
+          }
+        },
+        "responses": {
+          "200": {
+            "body": {
+              "data": { "type": "array", "items": { "$ref": "Insight" } },
+              "generatedAt": { "type": "string", "format": "datetime" }
+            }
+          }
+        }
+      }
+    },
+
+    "export": {
+      "exportTransactions": {
+        "id":          "export.transactions",
+        "method":      "GET",
+        "path":        "/v1/export/transactions",
+        "description": "Exporta lançamentos filtrados em PDF, CSV ou XLSX. Resposta é um blob do arquivo.",
+        "auth":        true,
+        "roles":       ["admin","gerente","analista"],
+        "request": {
+          "query": {
+            "format":      { "$ref": "ExportFormat", "required": true },
+            "period":      { "type": "string",  "required": false },
+            "periodStart": { "type": "string",  "format": "date", "required": false },
+            "periodEnd":   { "type": "string",  "format": "date", "required": false },
+            "type":        { "type": "string",  "required": false },
+            "category":    { "type": "string",  "required": false }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Arquivo binário",
+            "headers": { "Content-Disposition": "attachment; filename=transactions.{format}" }
+          }
+        }
+      },
+
+      "exportReport": {
+        "id":          "export.report",
+        "method":      "POST",
+        "path":        "/v1/export/report",
+        "description": "Gera PDF do relatório completo com KPIs, gráficos e insights do período.",
+        "auth":        true,
+        "roles":       ["admin","gerente","analista"],
+        "request": {
+          "body": {
+            "format":       { "$ref": "ExportFormat", "required": true },
+            "period":       { "$ref": "PeriodParams", "required": false },
+            "sections":     { "type": "array", "items": { "type": "enum", "enum": ["kpis","cash_flow","by_category","net_worth","insights"] }, "description": "Seções a incluir. Padrão: todas." },
+            "title":        { "type": "string", "required": false, "description": "Título customizado do relatório" },
+            "includeCharts":{ "type": "boolean", "default": true }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Blob do arquivo gerado",
+            "headers": { "Content-Disposition": "attachment; filename=relatorio-finlumia.{format}" }
+          },
+          "202": {
+            "description": "Para relatórios grandes — retorna jobId para download assíncrono",
+            "body": { "jobId": { "type": "uuid" }, "estimatedSeconds": { "type": "number" } }
+          }
+        }
+      },
+
+      "getExportJobStatus": {
+        "id":          "export.get_job_status",
+        "method":      "GET",
+        "path":        "/v1/export/:jobId",
+        "description": "Verifica status de exportação assíncrona e retorna URL de download quando pronto.",
+        "auth":        true,
+        "roles":       ["*"],
+        "request": {
+          "params": { "jobId": { "type": "uuid", "required": true } }
+        },
+        "responses": {
+          "200": {
+            "body": {
+              "status":      { "type": "enum", "enum": ["pending","processing","completed","failed"] },
+              "downloadUrl": { "type": "string", "nullable": true, "description": "Disponível quando status=completed" },
+              "expiresAt":   { "type": "string", "format": "datetime", "nullable": true }
+            }
+          }
+        }
+      }
+    }
+  }
+}

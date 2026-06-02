@@ -1,0 +1,310 @@
+{
+  "_meta": {
+    "service": "identification",
+    "version": "v1",
+    "description": "Autenticação, gerenciamento de sessão, perfil do usuário e KPIs do painel principal.",
+    "baseUrls": {
+      "local":       "http://localhost:8080/identification",
+      "homologation":"https://api-hom.finlumia.com/identification",
+      "production":  "https://api.finlumia.com/identification"
+    }
+  },
+
+  "schemas": {
+    "UserProfile": {
+      "id":        { "type": "uuid",   "description": "Identificador único do usuário" },
+      "name":      { "type": "string", "maxLength": 255 },
+      "email":     { "type": "string", "format": "email" },
+      "role":      { "type": "enum",   "enum": ["admin","gerente","analista","viewer"] },
+      "status":    { "type": "enum",   "enum": ["ativo","inativo","pendente"] },
+      "mfa":       { "type": "boolean","description": "MFA habilitado" },
+      "lastLogin": { "type": "string", "format": "datetime", "nullable": true },
+      "createdAt": { "type": "string", "format": "datetime" },
+      "updatedAt": { "type": "string", "format": "datetime" }
+    },
+
+    "TokenPair": {
+      "accessToken":  { "type": "string", "description": "JWT de acesso — válido por 15 min" },
+      "refreshToken": { "type": "string", "description": "JWT de renovação — válido por 7 dias" },
+      "expiresIn":    { "type": "number", "description": "Segundos até expiração do accessToken" },
+      "tokenType":    { "type": "string", "example": "Bearer" }
+    },
+
+    "DashboardKPI": {
+      "totalBalance":        { "type": "number" },
+      "totalIncome":         { "type": "number" },
+      "totalExpenses":       { "type": "number" },
+      "totalInvestments":    { "type": "number" },
+      "savingRate":          { "type": "number", "description": "% de economia do período" },
+      "periodStart":         { "type": "string", "format": "date" },
+      "periodEnd":           { "type": "string", "format": "date" }
+    },
+
+    "ErrorResponse": {
+      "code":    { "type": "string", "description": "Código interno do erro ex: INVALID_CREDENTIALS" },
+      "message": { "type": "string" },
+      "field":   { "type": "string", "nullable": true, "description": "Campo que gerou o erro (validações)" }
+    },
+
+    "PaginationMeta": {
+      "page":       { "type": "number" },
+      "pageSize":   { "type": "number" },
+      "total":      { "type": "number" },
+      "totalPages": { "type": "number" }
+    }
+  },
+
+  "endpoints": {
+
+    "auth": {
+      "login": {
+        "id":          "auth.login",
+        "method":      "POST",
+        "path":        "/v1/auth/login",
+        "description": "Autenticação com e-mail e senha. Retorna par de tokens JWT.",
+        "auth":        false,
+        "roles":       [],
+        "request": {
+          "body": {
+            "email":    { "type": "string",  "format": "email", "required": true  },
+            "password": { "type": "string",  "minLength": 6,    "required": true  },
+            "remember": { "type": "boolean", "required": false, "default": false,
+                          "description": "Se true, refreshToken dura 30 dias ao invés de 7" }
+          }
+        },
+        "responses": {
+          "200": { "description": "Login bem-sucedido",      "body": { "$ref": "TokenPair", "user": { "$ref": "UserProfile" } } },
+          "401": { "description": "Credenciais inválidas",   "body": { "$ref": "ErrorResponse" } },
+          "403": { "description": "Usuário inativo/bloqueado","body": { "$ref": "ErrorResponse" } },
+          "429": { "description": "Muitas tentativas",       "body": { "$ref": "ErrorResponse" } }
+        }
+      },
+
+      "loginGoogle": {
+        "id":          "auth.login_google",
+        "method":      "POST",
+        "path":        "/v1/auth/login/google",
+        "description": "Troca o idToken do Google por tokens JWT da plataforma.",
+        "auth":        false,
+        "roles":       [],
+        "request": {
+          "body": {
+            "idToken": { "type": "string", "required": true, "description": "Token retornado pelo OAuth Google" }
+          }
+        },
+        "responses": {
+          "200": { "description": "Login Google bem-sucedido", "body": { "$ref": "TokenPair", "user": { "$ref": "UserProfile" }, "isNewUser": { "type": "boolean" } } },
+          "401": { "description": "idToken inválido ou expirado", "body": { "$ref": "ErrorResponse" } }
+        }
+      },
+
+      "logout": {
+        "id":          "auth.logout",
+        "method":      "POST",
+        "path":        "/v1/auth/logout",
+        "description": "Invalida o refreshToken no servidor (revogação de sessão).",
+        "auth":        true,
+        "roles":       ["*"],
+        "request": {
+          "body": {
+            "refreshToken": { "type": "string", "required": true }
+          }
+        },
+        "responses": {
+          "204": { "description": "Sessão encerrada com sucesso" },
+          "401": { "description": "Token inválido", "body": { "$ref": "ErrorResponse" } }
+        }
+      },
+
+      "refresh": {
+        "id":          "auth.refresh",
+        "method":      "POST",
+        "path":        "/v1/auth/refresh",
+        "description": "Renova o accessToken usando um refreshToken válido.",
+        "auth":        false,
+        "roles":       [],
+        "request": {
+          "body": {
+            "refreshToken": { "type": "string", "required": true }
+          }
+        },
+        "responses": {
+          "200": { "description": "Novo par de tokens gerado", "body": { "$ref": "TokenPair" } },
+          "401": { "description": "refreshToken expirado ou revogado", "body": { "$ref": "ErrorResponse" } }
+        }
+      },
+
+      "forgotPassword": {
+        "id":          "auth.forgot_password",
+        "method":      "POST",
+        "path":        "/v1/auth/forgot-password",
+        "description": "Envia código OTP de 6 dígitos para o e-mail cadastrado.",
+        "auth":        false,
+        "roles":       [],
+        "request": {
+          "body": {
+            "email": { "type": "string", "format": "email", "required": true }
+          }
+        },
+        "responses": {
+          "200": { "description": "E-mail enviado (sempre 200 para não vazar existência de e-mail)",
+                   "body": { "message": { "type": "string" }, "expiresInSeconds": { "type": "number" } } }
+        }
+      },
+
+      "verifyResetToken": {
+        "id":          "auth.verify_reset_token",
+        "method":      "POST",
+        "path":        "/v1/auth/verify-reset-token",
+        "description": "Valida o OTP de 6 dígitos antes de permitir redefinição de senha.",
+        "auth":        false,
+        "roles":       [],
+        "request": {
+          "body": {
+            "email": { "type": "string",  "format": "email", "required": true },
+            "token": { "type": "string",  "length": 6,       "required": true, "description": "OTP numérico" }
+          }
+        },
+        "responses": {
+          "200": { "description": "Token válido", "body": { "resetSession": { "type": "string", "description": "Token temporário para a etapa de troca de senha (15 min)" } } },
+          "400": { "description": "Token inválido ou expirado", "body": { "$ref": "ErrorResponse" } }
+        }
+      },
+
+      "resetPassword": {
+        "id":          "auth.reset_password",
+        "method":      "POST",
+        "path":        "/v1/auth/reset-password",
+        "description": "Redefine a senha usando o resetSession da etapa anterior.",
+        "auth":        false,
+        "roles":       [],
+        "request": {
+          "body": {
+            "resetSession":      { "type": "string", "required": true },
+            "newPassword":       { "type": "string", "minLength": 8, "required": true },
+            "confirmPassword":   { "type": "string", "minLength": 8, "required": true }
+          }
+        },
+        "responses": {
+          "200": { "description": "Senha redefinida com sucesso", "body": { "message": { "type": "string" } } },
+          "400": { "description": "Senhas não coincidem ou sessão inválida", "body": { "$ref": "ErrorResponse" } }
+        }
+      }
+    },
+
+    "me": {
+      "getProfile": {
+        "id":          "me.get_profile",
+        "method":      "GET",
+        "path":        "/v1/me",
+        "description": "Retorna perfil completo do usuário autenticado.",
+        "auth":        true,
+        "roles":       ["*"],
+        "responses": {
+          "200": { "body": { "$ref": "UserProfile" } },
+          "401": { "body": { "$ref": "ErrorResponse" } }
+        }
+      },
+
+      "updateProfile": {
+        "id":          "me.update_profile",
+        "method":      "PATCH",
+        "path":        "/v1/me",
+        "description": "Atualiza nome e preferências do usuário autenticado.",
+        "auth":        true,
+        "roles":       ["*"],
+        "request": {
+          "body": {
+            "name":   { "type": "string", "maxLength": 255, "required": false },
+            "locale": { "type": "string", "example": "pt-BR", "required": false },
+            "theme":  { "type": "enum",   "enum": ["light","dark"], "required": false }
+          }
+        },
+        "responses": {
+          "200": { "body": { "$ref": "UserProfile" } },
+          "422": { "body": { "$ref": "ErrorResponse" } }
+        }
+      },
+
+      "changePassword": {
+        "id":          "me.change_password",
+        "method":      "POST",
+        "path":        "/v1/me/change-password",
+        "description": "Troca senha com autenticação — exige senha atual.",
+        "auth":        true,
+        "roles":       ["*"],
+        "request": {
+          "body": {
+            "currentPassword": { "type": "string", "required": true },
+            "newPassword":     { "type": "string", "minLength": 8, "required": true },
+            "confirmPassword": { "type": "string", "required": true }
+          }
+        },
+        "responses": {
+          "200": { "description": "Senha alterada com sucesso" },
+          "400": { "description": "Senha atual incorreta", "body": { "$ref": "ErrorResponse" } }
+        }
+      },
+
+      "toggleMfa": {
+        "id":          "me.toggle_mfa",
+        "method":      "PATCH",
+        "path":        "/v1/me/mfa",
+        "description": "Habilita ou desabilita MFA para o usuário autenticado.",
+        "auth":        true,
+        "roles":       ["*"],
+        "request": {
+          "body": {
+            "enabled":       { "type": "boolean", "required": true },
+            "currentPassword":{ "type": "string",  "required": true, "description": "Confirmação de segurança" }
+          }
+        },
+        "responses": {
+          "200": { "body": { "mfa": { "type": "boolean" }, "qrCodeUrl": { "type": "string", "nullable": true } } },
+          "400": { "body": { "$ref": "ErrorResponse" } }
+        }
+      }
+    },
+
+    "dashboard": {
+      "getKPIs": {
+        "id":          "dashboard.get_kpis",
+        "method":      "GET",
+        "path":        "/v1/dashboard/kpis",
+        "description": "KPIs do painel: saldo total, receitas, despesas, investimentos do período.",
+        "auth":        true,
+        "roles":       ["*"],
+        "request": {
+          "query": {
+            "periodStart": { "type": "string", "format": "date", "required": false, "description": "yyyy-MM-dd. Padrão: início do mês corrente" },
+            "periodEnd":   { "type": "string", "format": "date", "required": false, "description": "yyyy-MM-dd. Padrão: hoje" }
+          }
+        },
+        "responses": {
+          "200": { "body": { "$ref": "DashboardKPI" } }
+        }
+      },
+
+      "getRecentTransactions": {
+        "id":          "dashboard.get_recent_transactions",
+        "method":      "GET",
+        "path":        "/v1/dashboard/recent-transactions",
+        "description": "Últimas 10 movimentações para exibição no painel.",
+        "auth":        true,
+        "roles":       ["*"],
+        "request": {
+          "query": {
+            "limit": { "type": "number", "default": 10, "max": 25, "required": false }
+          }
+        },
+        "responses": {
+          "200": {
+            "body": {
+              "data": { "type": "array", "items": { "$ref": "movimentation#schemas.Transaction" } }
+            }
+          }
+        }
+      }
+    }
+  }
+}

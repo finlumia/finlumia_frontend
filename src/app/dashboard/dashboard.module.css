@@ -1,0 +1,113 @@
+.shell {
+    display: flex;
+    min-height: 100vh;
+    width: 100%;
+}
+
+/* ── Main content area ──────────────────────────────────────────────── */
+.main {
+    flex: 1;
+    min-width: 0;
+    min-height: 100vh;
+    overflow-y: auto;
+    transition: margin-left 0.25s ease;
+    margin-left: 0;
+}
+
+/* Notebook / desktop: offset the content by the persistent sidebar width.
+   --sidebar-width is provided inline by the layout based on collapsed state. */
+@media (min-width: 1024px) {
+    .main {
+        margin-left: var(--sidebar-width, 24rem);
+    }
+}
+
+/* On mobile/tablet leave room for the fixed topbar */
+@media (max-width: 1023px) {
+    .main {
+        padding-top: 5.6rem;
+    }
+}
+
+/* Centers page content within the area to the right of the sidebar */
+.mainInner {
+    width: 100%;
+    max-width: 140rem;
+    margin-inline: auto;
+    box-sizing: border-box;
+}
+
+/* ── Mobile / tablet topbar ─────────────────────────────────────────── */
+.topbar {
+    display: none;
+}
+
+@media (max-width: 1023px) {
+    .topbar {
+        display: flex;
+        align-items: center;
+        gap: 1.2rem;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 5.6rem;
+        padding: 0 1.6rem;
+        z-index: 90;
+        border-bottom-width: 1px;
+        border-bottom-style: solid;
+        backdrop-filter: saturate(180%) blur(8px);
+    }
+}
+
+.menuButton {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 4rem;
+    height: 4rem;
+    border: none;
+    background: transparent;
+    border-radius: 0.8rem;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background-color 0.15s ease;
+}
+
+.menuButton:hover {
+    background-color: rgba(128, 128, 128, 0.15);
+}
+
+.topbarLogo {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+}
+
+.topbarLogoText {
+    font-weight: 700;
+    font-size: 1.6rem;
+    letter-spacing: 0.04em;
+}
+
+/* ── Backdrop behind the drawer ─────────────────────────────────────── */
+.backdrop {
+    display: none;
+}
+
+@media (max-width: 1023px) {
+    .backdrop {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 95;
+        background-color: rgba(2, 8, 23, 0.5);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.25s ease;
+    }
+    .backdrop.open {
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
