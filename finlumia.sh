@@ -124,18 +124,19 @@ start_up() {
   env_file="$(env_file_args)"
 
   echo "Subindo container '${NAME}' (npm install → build → start)..."
+  # NODE_ENV=production no install omite devDependencies (typescript, @types/*) exigidos pelo next build.
   # shellcheck disable=SC2086
   docker run -d \
     --name "$NAME" \
+    --restart unless-stopped \
     -p "${PORT}:3000" \
     -v "${ROOT}:${APP_MOUNT}" \
     -w "$APP_MOUNT" \
     $env_file \
-    -e NODE_ENV=production \
     -e NEXT_TELEMETRY_DISABLED=1 \
     -e NPM_CONFIG_CACHE=/home/finlumia/.npm \
     "$IMAGE" \
-    bash -lc 'npm install && npm run build && npm run start -- -H 0.0.0.0 -p 3000' \
+    bash -lc 'npm install --include=dev && npm run build && NODE_ENV=production npm run start -- -H 0.0.0.0 -p 3000' \
     || docker_fail run
 
   echo ""

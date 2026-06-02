@@ -211,7 +211,8 @@ finlumia_frontend/
 │       │   ├── theme.context.tsx
 │       │   └── tokens/
 │       └── constants/ | hooks/ | utils/ | types/
-├── finlumia.ps1                # Automação Docker (Windows)
+├── finlumia.ps1                # Automação Docker (Windows, dev)
+├── finlumia.sh                 # Automação Docker (Linux/VPS, build + start)
 ├── next.config.ts
 ├── package.json
 └── tsconfig.json
@@ -420,7 +421,7 @@ npm run dev
 
 Abra [http://localhost:3000](http://localhost:3000).
 
-### Docker (`finlumia.ps1`)
+### Docker — Windows (`finlumia.ps1`)
 
 ```powershell
 ./finlumia.ps1 -up              # Sobe container + dev server
@@ -429,6 +430,19 @@ Abra [http://localhost:3000](http://localhost:3000).
 ./finlumia.ps1 -Shell           # Shell no container
 ./finlumia.ps1 -down            # Para e remove
 ```
+
+### Docker — Linux / VPS (`finlumia.sh`)
+
+```bash
+chmod +x finlumia.sh
+./finlumia.sh -up              # install (com devDeps) → build → start (produção)
+./finlumia.sh -up -Build       # Rebuild da imagem Docker
+./finlumia.sh -Logs            # Logs (build pode levar alguns minutos)
+./finlumia.sh -Shell           # Shell no container
+./finlumia.sh -down            # Para e remove
+```
+
+Configure `.env.local` antes do primeiro `-up` (variáveis `NEXT_PUBLIC_*` entram no build). O container usa `--restart unless-stopped`.
 
 Repositório montado em `/workspace` no container. App em [http://localhost:3000](http://localhost:3000).
 
@@ -493,7 +507,8 @@ node ./node_modules/typescript/bin/tsc --noEmit
 |---------|---------|
 | Dockerfile | `docker/scripts/finlumia_front.Dockerfile` |
 | Dev Container | `.devcontainer/devcontainer.json` |
-| Script PowerShell | `finlumia.ps1` |
+| Script PowerShell (dev) | `finlumia.ps1` |
+| Script Bash (VPS/prod) | `finlumia.sh` |
 
 Imagem: AlmaLinux 10, Node.js 24, Git, gcc-c++, python3, Docker CLI.
 
