@@ -14,8 +14,9 @@
 *.yaml  text eol=lf
 *.yml   text eol=lf
 
-# Shell scripts
+# Shell scripts (LF no repositório; evita quebra no Linux ao clonar no Windows)
 *.sh    text eol=lf
+finlumia.sh text eol=lf
 
 # Binary assets (do not diff as text)
 *.ico   binary
