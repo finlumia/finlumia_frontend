@@ -101,7 +101,7 @@ export function PermissionsPage() {
         <ConfigLayout activeTab="permissions" theme={theme}>
             <DataTable
                 columns={columns}
-                data={filtered as unknown as Record<string, unknown>[]}
+                data={filtered}
                 keyField="id"
                 theme={theme}
                 title="Permissões de acesso"
@@ -109,8 +109,8 @@ export function PermissionsPage() {
                 newLabel="+ Nova permissão"
                 extraFilters={filters}
                 onNew={() => { setEditing(null); setModalOpen(true); }}
-                onEdit={(row) => { setEditing(row as unknown as PermissionRecord); setModalOpen(true); }}
-                onDelete={(row) => setData((prev) => prev.filter((r) => r.id !== (row as unknown as PermissionRecord).id))}
+                onEdit={(row) => { setEditing(row); setModalOpen(true); }}
+                onDelete={(row) => setData((prev) => prev.filter((r) => r.id !== row.id))}
                 searchPlaceholder="Buscar por módulo ou subsistema..."
             />
             <CrudModal

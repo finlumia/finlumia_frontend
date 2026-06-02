@@ -96,15 +96,15 @@ export function TriggersPage() {
         <ConfigLayout activeTab="triggers" theme={theme}>
             <DataTable
                 columns={columns}
-                data={data as unknown as Record<string, unknown>[]}
+                data={data}
                 keyField="id"
                 theme={theme}
                 title="Triggers do banco de dados"
                 subtitle="Gatilhos BEFORE, AFTER e INSTEAD OF para INSERT, UPDATE, DELETE"
                 newLabel="+ Novo trigger"
                 onNew={() => { setEditing(null); setModalOpen(true); }}
-                onEdit={(row) => { setEditing(row as unknown as TriggerRecord); setModalOpen(true); }}
-                onDelete={(row) => setData((prev) => prev.filter((r) => r.id !== (row as unknown as TriggerRecord).id))}
+                onEdit={(row) => { setEditing(row); setModalOpen(true); }}
+                onDelete={(row) => setData((prev) => prev.filter((r) => r.id !== row.id))}
                 searchPlaceholder="Buscar por nome ou tabela..."
             />
             <CrudModal

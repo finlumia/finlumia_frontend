@@ -63,15 +63,15 @@ export function TablesPage() {
         <ConfigLayout activeTab="tables" theme={theme}>
             <DataTable
                 columns={columns}
-                data={data as unknown as Record<string, unknown>[]}
+                data={data}
                 keyField="id"
                 theme={theme}
                 title="Tabelas do banco de dados"
                 subtitle="Gerencie as tabelas e seus schemas"
                 newLabel="+ Nova tabela"
                 onNew={() => { setEditing(null); setModalOpen(true); }}
-                onEdit={(row) => { setEditing(row as unknown as TableRecord); setModalOpen(true); }}
-                onDelete={(row) => setData((prev) => prev.filter((r) => r.id !== (row as unknown as TableRecord).id))}
+                onEdit={(row) => { setEditing(row); setModalOpen(true); }}
+                onDelete={(row) => setData((prev) => prev.filter((r) => r.id !== row.id))}
                 searchPlaceholder="Buscar por nome ou schema..."
                 searchFields={["name", "schema"] as never[]}
             />

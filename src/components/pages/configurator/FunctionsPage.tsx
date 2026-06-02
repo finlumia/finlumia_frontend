@@ -92,15 +92,15 @@ export function FunctionsPage() {
         <ConfigLayout activeTab="functions" theme={theme}>
             <DataTable
                 columns={columns}
-                data={data as unknown as Record<string, unknown>[]}
+                data={data}
                 keyField="id"
                 theme={theme}
                 title="Funções do banco de dados"
                 subtitle="Stored procedures, funções SQL e PL/pgSQL"
                 newLabel="+ Nova função"
                 onNew={() => { setEditing(null); setModalOpen(true); }}
-                onEdit={(row) => { setEditing(row as unknown as FunctionRecord); setModalOpen(true); }}
-                onDelete={(row) => setData((prev) => prev.filter((r) => r.id !== (row as unknown as FunctionRecord).id))}
+                onEdit={(row) => { setEditing(row); setModalOpen(true); }}
+                onDelete={(row) => setData((prev) => prev.filter((r) => r.id !== row.id))}
                 searchPlaceholder="Buscar por nome ou schema..."
             />
             <CrudModal

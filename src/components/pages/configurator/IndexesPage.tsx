@@ -87,15 +87,15 @@ export function IndexesPage() {
         <ConfigLayout activeTab="indexes" theme={theme}>
             <DataTable
                 columns={columns}
-                data={data as unknown as Record<string, unknown>[]}
+                data={data}
                 keyField="id"
                 theme={theme}
                 title="Índices do banco de dados"
                 subtitle="B-Tree, Hash, GIN, GiST e BRIN — performance de consultas"
                 newLabel="+ Novo índice"
                 onNew={() => { setEditing(null); setModalOpen(true); }}
-                onEdit={(row) => { setEditing(row as unknown as IndexRecord); setModalOpen(true); }}
-                onDelete={(row) => setData((prev) => prev.filter((r) => r.id !== (row as unknown as IndexRecord).id))}
+                onEdit={(row) => { setEditing(row); setModalOpen(true); }}
+                onDelete={(row) => setData((prev) => prev.filter((r) => r.id !== row.id))}
                 searchPlaceholder="Buscar por nome ou tabela..."
             />
             <CrudModal

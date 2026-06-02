@@ -99,15 +99,15 @@ export function UsersPage() {
         <ConfigLayout activeTab="users" theme={theme}>
             <DataTable
                 columns={columns}
-                data={data as unknown as Record<string, unknown>[]}
+                data={data}
                 keyField="id"
                 theme={theme}
                 title="Gerenciamento de usuários"
                 subtitle="Cadastre e gerencie os usuários da plataforma"
                 newLabel="+ Novo usuário"
                 onNew={() => { setEditing(null); setModalOpen(true); }}
-                onEdit={(row) => { setEditing(row as unknown as UserRecord); setModalOpen(true); }}
-                onDelete={(row) => setData((prev) => prev.filter((r) => r.id !== (row as unknown as UserRecord).id))}
+                onEdit={(row) => { setEditing(row); setModalOpen(true); }}
+                onDelete={(row) => setData((prev) => prev.filter((r) => r.id !== row.id))}
                 searchPlaceholder="Buscar por nome ou e-mail..."
             />
             <CrudModal

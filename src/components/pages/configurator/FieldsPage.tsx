@@ -105,7 +105,7 @@ export function FieldsPage() {
         <ConfigLayout activeTab="fields" theme={theme}>
             <DataTable
                 columns={columns}
-                data={filtered as unknown as Record<string, unknown>[]}
+                data={filtered}
                 keyField="id"
                 theme={theme}
                 title="Campos das tabelas"
@@ -113,8 +113,8 @@ export function FieldsPage() {
                 newLabel="+ Novo campo"
                 extraFilters={tableFilterEl}
                 onNew={() => { setEditing(null); setModalOpen(true); }}
-                onEdit={(row) => { setEditing(row as unknown as FieldRecord); setModalOpen(true); }}
-                onDelete={(row) => setData((prev) => prev.filter((r) => r.id !== (row as unknown as FieldRecord).id))}
+                onEdit={(row) => { setEditing(row); setModalOpen(true); }}
+                onDelete={(row) => setData((prev) => prev.filter((r) => r.id !== row.id))}
                 searchPlaceholder="Buscar por nome ou tabela..."
             />
             <CrudModal
