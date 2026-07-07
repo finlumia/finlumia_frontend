@@ -7,9 +7,27 @@
   box-sizing: border-box;
 }
 
-/* 1rem = 10px — escala compacta para títulos e corpo (2.8rem ≈ 28px) */
+/* 1rem = 10px — escala compacta para títulos e corpo (2.8rem ≈ 28px).
+   Como tudo no app é dimensionado em rem, sem esses breakpoints o layout
+   fica com o mesmo tamanho físico em qualquer resolução — em monitores
+   grandes (1440p/4K/ultrawide) isso obrigava o usuário a dar zoom no
+   navegador pra conseguir ler confortavelmente. Aumentar o rem-base conforme
+   a largura da viewport escala texto, ícones e espaçamentos proporcionalmente
+   sem exigir zoom manual. */
 html {
   font-size: 62.5%;
+}
+
+@media (min-width: 1440px) {
+  html { font-size: 68.75%; } /* 1rem = 11px */
+}
+
+@media (min-width: 1920px) {
+  html { font-size: 75%; } /* 1rem = 12px */
+}
+
+@media (min-width: 2560px) {
+  html { font-size: 87.5%; } /* 1rem = 14px */
 }
 
 body {

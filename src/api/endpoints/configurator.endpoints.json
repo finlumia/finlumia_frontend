@@ -6,8 +6,8 @@
     "roles_required": "Todos os endpoints deste serviço exigem role=admin, exceto onde indicado.",
     "baseUrls": {
       "local":       "http://localhost:8080/configurator",
-      "homologation":"https://api-hom.finlumia.com/configurator",
-      "production":  "https://api.finlumia.com/configurator"
+      "homologation":"https://<seu-host-homologacao>/configurator",
+      "production":  "https://apifinlumia.thiagobenevide.com.br/configurator"
     }
   },
 

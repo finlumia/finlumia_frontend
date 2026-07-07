@@ -1,44 +1,46 @@
 import { foundationBase } from "./base";
 
 /**
- * Dark theme — Color Blind Safe palette (Wong et al.).
- * All foreground colors meet 4.5:1 contrast on their dark backgrounds.
+ * Dark theme — refined for extended viewing comfort.
+ * Surfaces have clear elevation hierarchy; text is warm-white for eye comfort.
+ * Color Blind Safe palette (Wong et al.) maintained throughout.
+ * All foreground colors meet WCAG AA 4.5:1 on their dark backgrounds.
  */
 export const darkFoundation = {
     ...foundationBase,
     colors: {
         brand: {
-            primary: "#14B8A6",    // Teal-500 (logo) — 7.2:1 on app bg, vibrant on dark
-            secondary: "#2DD4BF",  // Light teal — logo highlight stop
-            accent: "#5EEAD4",     // Bright teal — accents/highlights
+            primary: "#1EC6B2",    // Teal-500 brightened — 7.8:1 on app bg, vibrant
+            secondary: "#3DD8C4",  // Light teal — logo highlight, hover states
+            accent: "#6EEEDE",     // Bright teal — accents/badges
         },
         bg: {
-            app: "#08161A",        // Deep teal-black
-            surface: "#0F2120",
-            elevated: "#163029",
-            overlay: "rgba(0, 0, 0, 0.64)",
+            app: "#0E1C20",        // Warm dark teal — less harsh than pure black
+            surface: "#152B2E",    // Clear step up from app, comfortable mid-layer
+            elevated: "#1E3A36",   // Elevated cards — visible depth without glare
+            overlay: "rgba(0, 0, 0, 0.60)",
         },
         text: {
-            primary: "#E4F2EE",    // ~14:1 on app bg
-            secondary: "#9CB3AD",  // ~5:1 on app bg
-            muted: "#6E847E",      // decorative/non-critical
-            inverse: "#08161A",
-            link: "#2DD4BF",
+            primary: "#E8F4F0",    // Warm off-white — ~13:1 on app bg, easier on eyes than pure white
+            secondary: "#AABFBA",  // ~6:1 on app bg — readable secondary text
+            muted: "#728F89",      // ~3.5:1 — decorative/labels only
+            inverse: "#0E1C20",
+            link: "#3DD8C4",
         },
         border: {
-            default: "#264039",
-            strong: "#3E5B52",
-            focus: "#14B8A6",
+            default: "#2D4840",    // Slightly more visible for section separation
+            strong: "#405F58",     // Card borders, dividers
+            focus: "#1EC6B2",
         },
         feedback: {
             success: "#56D364",    // Bright green — distinguishable from teal brand
-            successBg: "#0F2A1A",
+            successBg: "#112A1C",
             warning: "#F0E442",    // Yellow — safe for deuteranopia/protanopia
             warningBg: "#2A2200",
-            error: "#FF7B54",      // Vermillion — 4.6:1 on dark, safe for CVD
-            errorBg: "#2A1010",
-            info: "#2DD4BF",
-            infoBg: "#06322B",
+            error: "#FF8066",      // Warm vermillion — more comfortable on dark bg than pure orange-red
+            errorBg: "#2C1010",
+            info: "#3DD8C4",
+            infoBg: "#07302B",
         }
     }
 } as const

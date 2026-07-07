@@ -1,55 +1,33 @@
 /**
  * Catálogo central de endpoints da plataforma Finlumia.
  *
- * Cada entrada expõe { url, method } derivados do ambiente ativo.
- * Contratos detalhados (schemas de request/response) estão nos JSONs:
- *   src/api/endpoints/identification.endpoints.json
- *   src/api/endpoints/movimentation.endpoints.json
- *   src/api/endpoints/document.endpoints.json
- *   src/api/endpoints/configurator.endpoints.json
+ * Todas as chamadas são roteadas pelo proxy Next.js (/proxy/<serviço>/*).
+ * O proxy injeta o Authorization header a partir do cookie HttpOnly —
+ * nenhuma URL de backend fica exposta no bundle do browser.
  */
 
 // ── Tipos base ─────────────────────────────────────────────────────────────
 
-type Environment  = "production" | "homologation" | "local";
-type ServiceName  = "configurator" | "identification" | "movimentation" | "document";
-type HttpMethod   = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-type Endpoint     = { url: string; method: HttpMethod };
+type ServiceName = "configurator" | "identification" | "movimentation" | "document" | "support";
+type HttpMethod  = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+type Endpoint    = { url: string; method: HttpMethod };
 
-// ── Configuração de ambiente ───────────────────────────────────────────────
-
-const CURRENT_ENV = (process.env.NEXT_PUBLIC_APP_ENV ?? "local") as Environment;
-
-export const API_VERSION = process.env.NEXT_PUBLIC_API_VERSION ?? "v1";
-
-const BASE: Record<Environment, Record<ServiceName, string>> = {
-  local: {
-    configurator:   process.env.NEXT_PUBLIC_SERVICE_CONFIGURATOR_LOCAL   ?? "http://localhost:8080/configurator",
-    identification: process.env.NEXT_PUBLIC_SERVICE_IDENTIFICATION_LOCAL  ?? "http://localhost:8080/identification",
-    movimentation:  process.env.NEXT_PUBLIC_SERVICE_MOVIMENTATION_LOCAL   ?? "http://localhost:8080/movimentation",
-    document:       process.env.NEXT_PUBLIC_SERVICE_DOCUMENT_LOCAL        ?? "http://localhost:8080/document",
-  },
-  homologation: {
-    configurator:   process.env.NEXT_PUBLIC_SERVICE_CONFIGURATOR_HOMOLOGATION   ?? "",
-    identification: process.env.NEXT_PUBLIC_SERVICE_IDENTIFICATION_HOMOLOGATION  ?? "",
-    movimentation:  process.env.NEXT_PUBLIC_SERVICE_MOVIMENTATION_HOMOLOGATION   ?? "",
-    document:       process.env.NEXT_PUBLIC_SERVICE_DOCUMENT_HOMOLOGATION        ?? "",
-  },
-  production: {
-    configurator:   process.env.NEXT_PUBLIC_SERVICE_CONFIGURATOR_PRODUCTION   ?? "",
-    identification: process.env.NEXT_PUBLIC_SERVICE_IDENTIFICATION_PRODUCTION  ?? "",
-    movimentation:  process.env.NEXT_PUBLIC_SERVICE_MOVIMENTATION_PRODUCTION   ?? "",
-    document:       process.env.NEXT_PUBLIC_SERVICE_DOCUMENT_PRODUCTION        ?? "",
-  },
+// Todos os ambientes usam o proxy — as URLs reais ficam em variáveis server-only.
+const BASE: Record<ServiceName, string> = {
+  identification: "/proxy/identify",
+  movimentation:  "/proxy/movement",
+  document:       "/proxy/document",
+  configurator:   "/proxy/configurator",
+  support:        "/proxy/support",
 };
 
-/** Constrói { url, method } para um endpoint específico. */
+/** Constrói { url, method } concatenando o prefixo do proxy com o path completo. */
 const ep = (service: ServiceName, path: string, method: HttpMethod): Endpoint => ({
-  url:    `${BASE[CURRENT_ENV][service]}/${API_VERSION}${path}`,
+  url:    `${BASE[service]}${path}`,
   method,
 });
 
-/** Substitui parâmetros de rota — ep('/transactions/:id', { id: '123' }) */
+/** Substitui parâmetros de rota — buildUrl(ep, { id: '123' }) */
 export function buildUrl(endpoint: Endpoint, params: Record<string, string> = {}): string {
   return Object.entries(params).reduce(
     (url, [k, v]) => url.replace(`:${k}`, encodeURIComponent(v)),
@@ -62,141 +40,159 @@ export function buildUrl(endpoint: Endpoint, params: Record<string, string> = {}
 export const API_ENDPOINTS = {
 
   // ════════════════════════════════════════════════════════════
-  // IDENTIFICATION — Autenticação, sessão, perfil, dashboard
+  // IDENTIFY — http://localhost:28083
   // ════════════════════════════════════════════════════════════
   auth: {
-    login:             ep("identification", "/auth/login",              "POST"),
-    loginGoogle:       ep("identification", "/auth/login/google",       "POST"),
-    logout:            ep("identification", "/auth/logout",             "POST"),
-    refresh:           ep("identification", "/auth/refresh",            "POST"),
-    forgotPassword:    ep("identification", "/auth/forgot-password",    "POST"),
-    verifyResetToken:  ep("identification", "/auth/verify-reset-token", "POST"),
-    resetPassword:     ep("identification", "/auth/reset-password",     "POST"),
+    login:            ep("identification", "/api/identify/token",                    "POST"),
+    loginGoogle:      ep("identification", "/api/identify/auth/login/google",        "POST"),
+    logout:           ep("identification", "/api/identify/token/revoke",             "POST"),
+    refresh:          ep("identification", "/api/identify/token/refresh",            "POST"),
+    forgotPassword:     ep("identification", "/api/identify/auth/forgot-password",       "POST"),
+    verifyResetToken:   ep("identification", "/api/identify/auth/verify-reset-token",    "POST"),
+    resetPassword:      ep("identification", "/api/identify/auth/reset-password",        "POST"),
+    register:           ep("identification", "/api/identify/auth/register",              "POST"),
+    verifyEmail:        ep("identification", "/api/identify/auth/verify-email",          "POST"),
+    resendVerification: ep("identification", "/api/identify/auth/resend-verification",   "POST"),
   },
 
   me: {
-    getProfile:     ep("identification", "/me",                  "GET"),
-    updateProfile:  ep("identification", "/me",                  "PATCH"),
-    changePassword: ep("identification", "/me/change-password",  "POST"),
-    toggleMfa:      ep("identification", "/me/mfa",              "PATCH"),
+    getProfile:     ep("identification", "/api/identify/me",                 "GET"),
+    updateProfile:  ep("identification", "/api/identify/me",                 "PATCH"),
+    changePassword: ep("identification", "/api/identify/me/change-password", "POST"),
+    toggleMfa:      ep("identification", "/api/identify/me/mfa",             "PATCH"),
   },
 
-  dashboard: {
-    getKPIs:               ep("identification", "/dashboard/kpis",                "GET"),
-    getRecentTransactions: ep("identification", "/dashboard/recent-transactions",  "GET"),
+  accessControl: {
+    check: ep("identification", "/api/identify/access-control/check", "POST"),
   },
 
   // ════════════════════════════════════════════════════════════
-  // MOVIMENTATION — Lançamentos financeiros e importação
+  // MOVEMENT — http://localhost:28084
   // ════════════════════════════════════════════════════════════
   transactions: {
-    list:        ep("movimentation", "/transactions",     "GET"),
-    getById:     ep("movimentation", "/transactions/:id", "GET"),
-    create:      ep("movimentation", "/transactions",     "POST"),
-    update:      ep("movimentation", "/transactions/:id", "PUT"),
-    patch:       ep("movimentation", "/transactions/:id", "PATCH"),
-    delete:      ep("movimentation", "/transactions/:id", "DELETE"),
-    batchDelete: ep("movimentation", "/transactions",     "DELETE"),
+    list:        ep("movimentation", "/api/v1/transactions",     "GET"),
+    getById:     ep("movimentation", "/api/v1/transactions/:id", "GET"),
+    create:      ep("movimentation", "/api/v1/transactions",     "POST"),
+    update:      ep("movimentation", "/api/v1/transactions/:id", "PUT"),
+    patch:       ep("movimentation", "/api/v1/transactions/:id", "PATCH"),
+    delete:      ep("movimentation", "/api/v1/transactions/:id", "DELETE"),
+    batchDelete: ep("movimentation", "/api/v1/transactions",     "DELETE"),
   },
 
   import: {
-    uploadFile:        ep("movimentation", "/transactions/import/upload",         "POST"),
-    getJobStatus:      ep("movimentation", "/transactions/import/:jobId",          "GET"),
-    confirmOcr:        ep("movimentation", "/transactions/import/:jobId/confirm",  "POST"),
-    confirmFileImport: ep("movimentation", "/transactions/import/:jobId/import",   "POST"),
+    uploadFile:        ep("movimentation", "/api/v1/transactions/import/upload",              "POST"),
+    getJobStatus:      ep("movimentation", "/api/v1/transactions/import/:jobId",              "GET"),
+    confirmOcr:        ep("movimentation", "/api/v1/transactions/import/:jobId/confirm",      "POST"),
+    confirmFileImport: ep("movimentation", "/api/v1/transactions/import/:jobId/import",       "POST"),
   },
 
   categories: {
-    list: ep("movimentation", "/categories", "GET"),
+    list: ep("movimentation", "/api/v1/categories", "GET"),
   },
 
   institutions: {
-    list: ep("movimentation", "/institutions", "GET"),
+    list: ep("movimentation", "/api/v1/institutions", "GET"),
   },
 
   // ════════════════════════════════════════════════════════════
-  // DOCUMENT — Relatórios analíticos e exportação
+  // DOCUMENT — http://localhost:28085  (28082 = Swagger UI apenas)
   // ════════════════════════════════════════════════════════════
   reports: {
-    getKPIs:               ep("document", "/reports/kpis",                "GET"),
-    getCashFlow:           ep("document", "/reports/cash-flow",           "GET"),
-    getByCategory:         ep("document", "/reports/by-category",         "GET"),
-    getByInstitution:      ep("document", "/reports/by-institution",      "GET"),
-    getNetWorth:           ep("document", "/reports/net-worth",           "GET"),
-    getMonthlyComparison:  ep("document", "/reports/monthly-comparison",  "GET"),
-    getInsights:           ep("document", "/reports/insights",            "GET"),
+    getKPIs:              ep("document", "/api/v1/reports/kpis",               "GET"),
+    getCashFlow:          ep("document", "/api/v1/reports/cash-flow",          "GET"),
+    getByCategory:        ep("document", "/api/v1/reports/by-category",        "GET"),
+    getByInstitution:     ep("document", "/api/v1/reports/by-institution",     "GET"),
+    getNetWorth:          ep("document", "/api/v1/reports/net-worth",          "GET"),
+    getMonthlyComparison: ep("document", "/api/v1/reports/monthly-comparison", "GET"),
+    getInsights:          ep("document", "/api/v1/reports/insights",           "GET"),
   },
 
   export: {
-    exportTransactions: ep("document", "/export/transactions",  "GET"),
-    exportReport:       ep("document", "/export/report",        "POST"),
-    getJobStatus:       ep("document", "/export/:jobId",         "GET"),
+    exportTransactions: ep("document", "/api/v1/export/transactions", "GET"),
+    exportReport:       ep("document", "/api/v1/export/report",       "POST"),
+    getJobStatus:       ep("document", "/api/v1/export/:jobId",        "GET"),
   },
 
   // ════════════════════════════════════════════════════════════
-  // CONFIGURATOR — Administração do sistema (admin only)
+  // CONFIGURATOR — http://localhost:28081
   // ════════════════════════════════════════════════════════════
   cfgTables: {
-    list:    ep("configurator", "/config/tables",     "GET"),
-    getById: ep("configurator", "/config/tables/:id", "GET"),
-    create:  ep("configurator", "/config/tables",     "POST"),
-    update:  ep("configurator", "/config/tables/:id", "PUT"),
-    delete:  ep("configurator", "/config/tables/:id", "DELETE"),
+    list:    ep("configurator", "/v1/config/tables",     "GET"),
+    getById: ep("configurator", "/v1/config/tables/:id", "GET"),
+    create:  ep("configurator", "/v1/config/tables",     "POST"),
+    update:  ep("configurator", "/v1/config/tables/:id", "PUT"),
+    delete:  ep("configurator", "/v1/config/tables/:id", "DELETE"),
   },
 
   cfgFields: {
-    list:    ep("configurator", "/config/fields",     "GET"),
-    getById: ep("configurator", "/config/fields/:id", "GET"),
-    create:  ep("configurator", "/config/fields",     "POST"),
-    update:  ep("configurator", "/config/fields/:id", "PUT"),
-    delete:  ep("configurator", "/config/fields/:id", "DELETE"),
+    list:    ep("configurator", "/v1/config/fields",     "GET"),
+    getById: ep("configurator", "/v1/config/fields/:id", "GET"),
+    create:  ep("configurator", "/v1/config/fields",     "POST"),
+    update:  ep("configurator", "/v1/config/fields/:id", "PUT"),
+    delete:  ep("configurator", "/v1/config/fields/:id", "DELETE"),
   },
 
   cfgUsers: {
-    list:               ep("configurator", "/config/users",                    "GET"),
-    getById:            ep("configurator", "/config/users/:id",                "GET"),
-    create:             ep("configurator", "/config/users",                    "POST"),
-    update:             ep("configurator", "/config/users/:id",                "PUT"),
-    delete:             ep("configurator", "/config/users/:id",                "DELETE"),
-    toggleStatus:       ep("configurator", "/config/users/:id/status",         "PATCH"),
-    adminResetPassword: ep("configurator", "/config/users/:id/reset-password", "POST"),
+    list:               ep("configurator", "/v1/config/users",                    "GET"),
+    getById:            ep("configurator", "/v1/config/users/:id",                "GET"),
+    create:             ep("configurator", "/v1/config/users",                    "POST"),
+    update:             ep("configurator", "/v1/config/users/:id",                "PUT"),
+    delete:             ep("configurator", "/v1/config/users/:id",                "DELETE"),
+    toggleStatus:       ep("configurator", "/v1/config/users/:id/status",         "PATCH"),
+    adminResetPassword: ep("configurator", "/v1/config/users/:id/reset-password", "POST"),
   },
 
   cfgPermissions: {
-    list:        ep("configurator", "/config/permissions",        "GET"),
-    getMatrix:   ep("configurator", "/config/permissions/matrix", "GET"),
-    create:      ep("configurator", "/config/permissions",        "POST"),
-    update:      ep("configurator", "/config/permissions/:id",    "PUT"),
-    batchUpdate: ep("configurator", "/config/permissions/batch",  "POST"),
-    delete:      ep("configurator", "/config/permissions/:id",    "DELETE"),
+    list:        ep("configurator", "/v1/config/permissions",        "GET"),
+    getMatrix:   ep("configurator", "/v1/config/permissions/matrix", "GET"),
+    create:      ep("configurator", "/v1/config/permissions",        "POST"),
+    update:      ep("configurator", "/v1/config/permissions/:id",    "PUT"),
+    batchUpdate: ep("configurator", "/v1/config/permissions/batch",  "POST"),
+    delete:      ep("configurator", "/v1/config/permissions/:id",    "DELETE"),
   },
 
   cfgFunctions: {
-    list:    ep("configurator", "/config/functions",         "GET"),
-    getById: ep("configurator", "/config/functions/:id",     "GET"),
-    create:  ep("configurator", "/config/functions",         "POST"),
-    update:  ep("configurator", "/config/functions/:id",     "PUT"),
-    delete:  ep("configurator", "/config/functions/:id",     "DELETE"),
-    test:    ep("configurator", "/config/functions/:id/test","POST"),
+    list:    ep("configurator", "/v1/config/functions",          "GET"),
+    getById: ep("configurator", "/v1/config/functions/:id",      "GET"),
+    create:  ep("configurator", "/v1/config/functions",          "POST"),
+    update:  ep("configurator", "/v1/config/functions/:id",      "PUT"),
+    delete:  ep("configurator", "/v1/config/functions/:id",      "DELETE"),
+    test:    ep("configurator", "/v1/config/functions/:id/test", "POST"),
   },
 
   cfgIndexes: {
-    list:     ep("configurator", "/config/indexes",              "GET"),
-    getById:  ep("configurator", "/config/indexes/:id",           "GET"),
-    create:   ep("configurator", "/config/indexes",              "POST"),
-    update:   ep("configurator", "/config/indexes/:id",           "PUT"),
-    delete:   ep("configurator", "/config/indexes/:id",           "DELETE"),
-    rebuild:  ep("configurator", "/config/indexes/:id/rebuild",   "POST"),
-    getStats: ep("configurator", "/config/indexes/:id/stats",     "GET"),
+    list:     ep("configurator", "/v1/config/indexes",              "GET"),
+    getById:  ep("configurator", "/v1/config/indexes/:id",          "GET"),
+    create:   ep("configurator", "/v1/config/indexes",              "POST"),
+    update:   ep("configurator", "/v1/config/indexes/:id",          "PUT"),
+    delete:   ep("configurator", "/v1/config/indexes/:id",          "DELETE"),
+    rebuild:  ep("configurator", "/v1/config/indexes/:id/rebuild",  "POST"),
+    getStats: ep("configurator", "/v1/config/indexes/:id/stats",    "GET"),
   },
 
   cfgTriggers: {
-    list:    ep("configurator", "/config/triggers",          "GET"),
-    getById: ep("configurator", "/config/triggers/:id",      "GET"),
-    create:  ep("configurator", "/config/triggers",          "POST"),
-    update:  ep("configurator", "/config/triggers/:id",      "PUT"),
-    toggle:  ep("configurator", "/config/triggers/:id/toggle","PATCH"),
-    delete:  ep("configurator", "/config/triggers/:id",      "DELETE"),
+    list:    ep("configurator", "/v1/config/triggers",           "GET"),
+    getById: ep("configurator", "/v1/config/triggers/:id",       "GET"),
+    create:  ep("configurator", "/v1/config/triggers",           "POST"),
+    update:  ep("configurator", "/v1/config/triggers/:id",       "PUT"),
+    toggle:  ep("configurator", "/v1/config/triggers/:id/toggle","PATCH"),
+    delete:  ep("configurator", "/v1/config/triggers/:id",       "DELETE"),
+  },
+
+  // ════════════════════════════════════════════════════════════
+  // SUPPORT — http://localhost:28082 (serviço docs unificado)
+  // ════════════════════════════════════════════════════════════
+  support: {
+    listTickets:        ep("support", "/api/v1/support/tickets",                                               "GET"),
+    createTicket:       ep("support", "/api/v1/support/tickets",                                               "POST"),
+    getStats:           ep("support", "/api/v1/support/tickets/stats",                                         "GET"),
+    getTicket:          ep("support", "/api/v1/support/tickets/:id",                                           "GET"),
+    patchTicket:        ep("support", "/api/v1/support/tickets/:id",                                           "PATCH"),
+    deleteTicket:       ep("support", "/api/v1/support/tickets/:id",                                           "DELETE"),
+    listResponses:      ep("support", "/api/v1/support/tickets/:ticketId/responses",                           "GET"),
+    addResponse:        ep("support", "/api/v1/support/tickets/:ticketId/responses",                           "POST"),
+    addAttachment:      ep("support", "/api/v1/support/tickets/:ticketId/attachments",                         "POST"),
+    downloadAttachment: ep("support", "/api/v1/support/tickets/:ticketId/attachments/:attachmentId/download",  "GET"),
   },
 
 } as const;

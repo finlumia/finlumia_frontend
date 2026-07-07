@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { DataTable, type ColumnDef } from "../../organisms/DataTable";
 import { CrudModal } from "../../organisms/CrudModal";
 import { getFoundationByTheme } from "../../../shared/styles/tokens";
@@ -11,8 +11,10 @@ import { TypeBadge, DeleteAction } from "./_catalogShared";
 export function BanksPage() {
     const { theme } = useTheme();
     const f = getFoundationByTheme(theme);
-    const { banks, addBank, removeBank } = useFinance();
+    const { banks, addBank, removeBank, loadData } = useFinance();
     const [modalOpen, setModalOpen] = useState(false);
+
+    useEffect(() => { loadData(); }, [loadData]);
 
     const columns: ColumnDef<Bank>[] = [
         {
@@ -34,7 +36,7 @@ export function BanksPage() {
         { key: "isDefault", label: "Tipo", render: (row) => <TypeBadge isDefault={row.isDefault} f={f} /> },
         {
             key: "acoes", label: "Ações", align: "right",
-            render: (row) => <DeleteAction isDefault={row.isDefault} f={f} onDelete={() => removeBank(row.id)} label={`Excluir ${row.label}`} />,
+            render: (row) => <DeleteAction isDefault={row.isDefault} f={f} theme={theme} onDelete={() => removeBank(row.id)} label={`Excluir ${row.label}`} itemName={row.label} />,
         },
     ];
 

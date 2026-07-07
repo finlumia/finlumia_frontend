@@ -1,3 +1,4 @@
+import type React from "react";
 import type { ThemeMode } from "../../../shared/styles/theme.types";
 
 export type ButtonVariant = "primary" | "secondary" | "outlined" | "inverted";
@@ -15,6 +16,7 @@ export type ButtonStyleConfig = {
     padding?: string;
     borderRadius?: string;
     border?: string;
+    opacity?: React.CSSProperties["opacity"];
     textAlign?: "left" | "center" | "right";
     align?: "left" | "center" | "right";
     justifyContent?: "flex-start" | "center" | "flex-end";

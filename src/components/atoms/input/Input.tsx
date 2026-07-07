@@ -24,6 +24,7 @@ export function Input({
     iconPosition = "left",
     required = false,
     autoComplete,
+    inputMode,
     onChange,
     onBlur,
     onFocus,
@@ -100,6 +101,7 @@ export function Input({
                     readOnly={readOnly}
                     required={required}
                     autoComplete={autoComplete}
+                    inputMode={inputMode}
                     aria-invalid={!!error}
                     aria-describedby={error ? `${id}-error` : helper ? `${id}-helper` : undefined}
                     onChange={onChange}

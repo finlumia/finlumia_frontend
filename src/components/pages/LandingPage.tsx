@@ -88,7 +88,7 @@ export function LandingPage() {
                         {
                             type: "logo",
                             props: {
-                                text: { label: "FINLUMIA", onClick: () => console.log("Logo principal"), styleConfig: textLogoStyle, theme },
+                                text: { label: "FINLUMIA", onClick: () => {}, styleConfig: textLogoStyle, theme },
                                 icon: { src: finlumiaIcon, alt: "Logo da Finlumia", theme },
                             },
                         },

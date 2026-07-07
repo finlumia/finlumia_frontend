@@ -1,5 +1,6 @@
 import { lightFoundation } from "../foundation/light";
 import { darkFoundation } from "../foundation/dark";
+import { colorblindFoundation } from "../foundation/colorblind";
 
 const buttonBase = {
   size: {
@@ -15,7 +16,12 @@ const buttonBase = {
   },
 } as const;
 
-const createThemeButtonTokens = (foundation: typeof lightFoundation | typeof darkFoundation) => ({
+type ButtonFoundation =
+  | typeof lightFoundation
+  | typeof darkFoundation
+  | typeof colorblindFoundation;
+
+const createThemeButtonTokens = (foundation: ButtonFoundation) => ({
   primary: {
     backgroundColor: foundation.colors.brand.primary,
     textColor: foundation.colors.text.inverse,
@@ -42,4 +48,5 @@ export const buttonTokens = {
   base: buttonBase,
   light: createThemeButtonTokens(lightFoundation),
   dark: createThemeButtonTokens(darkFoundation),
+  colorblind: createThemeButtonTokens(colorblindFoundation),
 } as const;

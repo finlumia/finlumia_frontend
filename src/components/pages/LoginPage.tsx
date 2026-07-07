@@ -1,11 +1,15 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Input } from "../atoms/input";
 import { Button } from "../atoms/button";
+import { GoogleSignInButton } from "../molecules/GoogleSignInButton";
 import { getFoundationByTheme } from "../../shared/styles/tokens";
+import { getAppBackground } from "../../shared/styles/appBackground";
 import { useTheme } from "../../shared/styles/theme.context";
+import { useAuth } from "../../contexts/auth.context";
+import { authService } from "../../services/identification/auth.service";
 
 const GoogleIcon = () => (
     <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
@@ -19,6 +23,7 @@ const GoogleIcon = () => (
 export function LoginPage() {
     const router = useRouter();
     const { theme } = useTheme();
+    const { login, refreshUser } = useAuth();
     const f = getFoundationByTheme(theme);
     const isDark = theme === "dark";
 
@@ -26,6 +31,29 @@ export function LoginPage() {
     const [password, setPassword] = useState("");
     const [emailError, setEmailError] = useState("");
     const [passwordError, setPasswordError] = useState("");
+    const [apiError, setApiError] = useState("");
+    const [isLoading, setIsLoading] = useState(false);
+    const [justVerified, setJustVerified] = useState(false);
+
+    // Lido apenas no client (window) para não exigir Suspense por useSearchParams.
+    useEffect(() => {
+        setJustVerified(new URLSearchParams(window.location.search).get("verified") === "1");
+    }, []);
+
+    const handleGoogleCredential = async (idToken: string) => {
+        setApiError("");
+        setIsLoading(true);
+        try {
+            await authService.loginWithGoogle(idToken);
+            await refreshUser();
+            router.push("/dashboard");
+        } catch (err: unknown) {
+            const msg = (err as { message?: string })?.message ?? "Não foi possível continuar com o Google.";
+            setApiError(msg);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     const validate = () => {
         let valid = true;
@@ -44,14 +72,23 @@ export function LoginPage() {
         return valid;
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (validate()) {
+        if (!validate()) return;
+
+        setApiError("");
+        setIsLoading(true);
+        try {
+            await login({ email, password });
             router.push("/dashboard");
+        } catch (err: unknown) {
+            const msg = (err as { message?: string })?.message ?? "Erro ao entrar. Verifique suas credenciais.";
+            setApiError(msg);
+        } finally {
+            setIsLoading(false);
         }
     };
 
-    const bg = isDark ? f.colors.bg.app : f.colors.bg.app;
     const cardBg = isDark ? f.colors.bg.surface : "#FFFFFF";
     const borderColor = f.colors.border.default;
     const primaryColor = f.colors.brand.primary;
@@ -60,7 +97,7 @@ export function LoginPage() {
     return (
         <div style={{
             minHeight: "100vh",
-            backgroundColor: bg,
+            ...getAppBackground(theme),
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -95,31 +132,32 @@ export function LoginPage() {
                     </p>
 
                     {/* Google Sign-In */}
-                    <button
-                        type="button"
-                        onClick={() => console.log("Google OAuth")}
-                        style={{
-                            width: "100%",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            gap: "0.8rem",
-                            height: "4.4rem",
-                            borderRadius: "0.8rem",
-                            border: `1px solid ${borderColor}`,
-                            backgroundColor: "transparent",
-                            color: f.colors.text.primary,
-                            fontSize: "1.4rem",
-                            fontWeight: 600,
-                            cursor: "pointer",
-                            fontFamily: "inherit",
-                            transition: "background-color 0.15s ease",
-                            marginBottom: "2rem",
-                        }}
-                    >
-                        <GoogleIcon />
-                        Continuar com Google
-                    </button>
+                    <GoogleSignInButton onCredential={handleGoogleCredential} onError={setApiError} disabled={isLoading}>
+                        <button
+                            type="button"
+                            style={{
+                                width: "100%",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: "0.8rem",
+                                height: "4.4rem",
+                                borderRadius: "0.8rem",
+                                border: `1px solid ${borderColor}`,
+                                backgroundColor: "transparent",
+                                color: f.colors.text.primary,
+                                fontSize: "1.4rem",
+                                fontWeight: 600,
+                                cursor: "pointer",
+                                fontFamily: "inherit",
+                                transition: "background-color 0.15s ease",
+                            }}
+                        >
+                            <GoogleIcon />
+                            Continuar com Google
+                        </button>
+                    </GoogleSignInButton>
+                    <div style={{ marginBottom: "2rem" }} />
 
                     {/* Divider */}
                     <div style={{ display: "flex", alignItems: "center", gap: "1.2rem", marginBottom: "2rem" }}>
@@ -127,6 +165,36 @@ export function LoginPage() {
                         <span style={{ fontSize: "1.2rem", color: mutedColor, whiteSpace: "nowrap" }}>ou entre com e-mail</span>
                         <div style={{ flex: 1, height: "1px", backgroundColor: borderColor }} />
                     </div>
+
+                    {/* Conta verificada com sucesso */}
+                    {justVerified && !apiError && (
+                        <div style={{
+                            backgroundColor: isDark ? f.colors.feedback.successBg : "#E6F4ED",
+                            border: `1px solid ${f.colors.feedback.success}`,
+                            borderRadius: "0.8rem",
+                            padding: "1.2rem 1.6rem",
+                            marginBottom: "1.6rem",
+                            fontSize: "1.3rem",
+                            color: f.colors.feedback.success,
+                        }}>
+                            E-mail confirmado! Agora é só entrar com sua senha.
+                        </div>
+                    )}
+
+                    {/* Erro de API */}
+                    {apiError && (
+                        <div style={{
+                            backgroundColor: isDark ? f.colors.feedback.errorBg : "#FEF2F2",
+                            border: `1px solid ${f.colors.feedback.error}`,
+                            borderRadius: "0.8rem",
+                            padding: "1.2rem 1.6rem",
+                            marginBottom: "1.6rem",
+                            fontSize: "1.3rem",
+                            color: f.colors.feedback.error,
+                        }}>
+                            {apiError}
+                        </div>
+                    )}
 
                     {/* Form */}
                     <form onSubmit={handleSubmit} noValidate style={{ display: "flex", flexDirection: "column", gap: "1.6rem" }}>
@@ -177,7 +245,7 @@ export function LoginPage() {
                         </div>
 
                         <Button
-                            label="Entrar"
+                            label={isLoading ? "Entrando..." : "Entrar"}
                             type="submit"
                             theme={theme}
                             variant="primary"
@@ -192,6 +260,7 @@ export function LoginPage() {
                                 height: "4.4rem",
                                 fontSize: "1.5rem",
                                 fontWeight: "600",
+                                opacity: isLoading ? "0.7" : "1",
                             }}
                         />
                     </form>
@@ -217,7 +286,6 @@ export function LoginPage() {
                     </p>
                 </div>
 
-                {/* Accessibility note */}
                 <p style={{ textAlign: "center", marginTop: "2rem", fontSize: "1.1rem", color: mutedColor }}>
                     Ao entrar, você concorda com nossos{" "}
                     <span style={{ color: primaryColor, cursor: "pointer" }}>Termos de Uso</span>{" "}

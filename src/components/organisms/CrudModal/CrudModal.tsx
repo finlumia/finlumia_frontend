@@ -55,13 +55,18 @@ export function CrudModal({
     const [form, setForm] = useState<Record<string, unknown>>(emptyForm);
     const [errors, setErrors] = useState<Record<string, string>>({});
 
+    // Reresseta o formulário apenas na transição para aberto — nunca a cada
+    // keystroke. `initial` não pode entrar nas deps: como as telas de criação
+    // não passam essa prop, o valor default `initial = {}` gera uma referência
+    // NOVA a cada re-render (inclusive o causado por onChange), o que fazia o
+    // effect rodar de novo e apagar o caractere recém-digitado a cada tecla.
     useEffect(() => {
         if (open) {
             setForm(emptyForm());
             setErrors({});
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open, initial]);
+    }, [open]);
 
     const set = (key: string, value: unknown) =>
         setForm((p) => ({ ...p, [key]: value }));

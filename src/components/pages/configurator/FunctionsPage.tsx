@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { DataTable, type ColumnDef } from "../../organisms/DataTable";
 import { CrudModal } from "../../organisms/CrudModal";
 import { ConfigLayout, StatusBadge, CodeChip } from "./_shared";
-import { MOCK_FUNCTIONS, type FunctionRecord } from "../../../config/configurator";
+import { cfgFunctionsService } from "../../../services/configurator/configurator.service";
+import type { CfgFunction, CfgFunctionCreateRequest } from "../../../api/types";
 import { getFoundationByTheme } from "../../../shared/styles/tokens";
 import { useTheme } from "../../../shared/styles/theme.context";
 
@@ -21,11 +22,25 @@ export function FunctionsPage() {
     const f = getFoundationByTheme(theme);
     const isDark = theme === "dark";
 
-    const [data, setData] = useState<FunctionRecord[]>(MOCK_FUNCTIONS);
+    const [data, setData] = useState<CfgFunction[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
     const [modalOpen, setModalOpen] = useState(false);
-    const [editing, setEditing] = useState<FunctionRecord | null>(null);
+    const [editing, setEditing] = useState<CfgFunction | null>(null);
+    const [modalError, setModalError] = useState("");
 
-    const columns: ColumnDef<FunctionRecord>[] = [
+    const load = useCallback(async () => {
+        setIsLoading(true);
+        try {
+            const res = await cfgFunctionsService.list();
+            setData(res.data);
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
+    useEffect(() => { load(); }, [load]);
+
+    const columns: ColumnDef<CfgFunction>[] = [
         {
             key: "name", label: "Função", sortable: true,
             render: (row) => (
@@ -40,7 +55,7 @@ export function FunctionsPage() {
         {
             key: "language", label: "Linguagem", sortable: true,
             render: (row) => {
-                const color = LANG_COLORS[row.language];
+                const color = LANG_COLORS[row.language] ?? f.colors.text.secondary;
                 return <span style={{ fontSize: "1.2rem", fontWeight: 600, fontFamily: "monospace", color, backgroundColor: `${color}15`, padding: "0.2rem 0.6rem", borderRadius: "0.4rem" }}>{row.language}</span>;
             },
         },
@@ -54,7 +69,7 @@ export function FunctionsPage() {
         {
             key: "volatility", label: "Volatilidade",
             render: (row) => {
-                const color = VOLATILITY_COLORS[row.volatility];
+                const color = VOLATILITY_COLORS[row.volatility] ?? f.colors.text.secondary;
                 return <span style={{ fontSize: "1.1rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", color }}>{row.volatility}</span>;
             },
         },
@@ -76,36 +91,58 @@ export function FunctionsPage() {
         { key: "status",     label: "Status",          type: "badge-select" as const,
           options: [{ value: "ativo", label: "Ativo" }, { value: "inativo", label: "Inativo" }],
           badgeColor: (v: string) => v === "ativo" ? f.colors.feedback.success : f.colors.text.muted },
-        { key: "description", label: "Descrição", type: "textarea" as const, placeholder: "O que esta função faz...", span: "full" as const },
+        { key: "body",        label: "Corpo da função", type: "textarea" as const, required: true, placeholder: "BEGIN\n  -- lógica aqui\nEND;", span: "full" as const },
+        { key: "description", label: "Descrição",       type: "textarea" as const, placeholder: "O que esta função faz...", span: "full" as const },
     ];
 
-    const handleSave = (formData: Record<string, unknown>) => {
-        if (editing) {
-            setData((prev) => prev.map((r) => r.id === editing.id ? { ...r, ...formData } as FunctionRecord : r));
-        } else {
-            setData((prev) => [{ ...formData, id: String(Date.now()), createdAt: new Date().toISOString().slice(0, 10) } as FunctionRecord, ...prev]);
+    const handleSave = async (formData: Record<string, unknown>) => {
+        setModalError("");
+        try {
+            if (editing) {
+                const updated = await cfgFunctionsService.update(editing.id, formData as Partial<CfgFunctionCreateRequest>);
+                setData((prev) => prev.map((r) => r.id === editing.id ? updated : r));
+            } else {
+                const created = await cfgFunctionsService.create(formData as CfgFunctionCreateRequest);
+                setData((prev) => [created, ...prev]);
+            }
+            setModalOpen(false);
+            setEditing(null);
+        } catch (err: unknown) {
+            setModalError((err as { message?: string })?.message ?? "Erro ao salvar. Tente novamente.");
         }
-        setEditing(null);
+    };
+
+    const handleDelete = async (row: CfgFunction) => {
+        try {
+            await cfgFunctionsService.delete(row.id);
+            setData((prev) => prev.filter((r) => r.id !== row.id));
+        } catch { /* keep data */ }
     };
 
     return (
         <ConfigLayout activeTab="functions" theme={theme}>
+            {modalError && (
+                <div style={{ marginBottom: "1.6rem", padding: "1.2rem 1.6rem", borderRadius: "0.8rem", backgroundColor: isDark ? f.colors.feedback.errorBg : "#FEF2F2", border: `1px solid ${f.colors.feedback.error}`, color: f.colors.feedback.error, fontSize: "1.3rem" }}>
+                    {modalError}
+                </div>
+            )}
             <DataTable
                 columns={columns}
                 data={data}
                 keyField="id"
                 theme={theme}
+                loading={isLoading}
                 title="Funções do banco de dados"
                 subtitle="Stored procedures, funções SQL e PL/pgSQL"
                 newLabel="+ Nova função"
-                onNew={() => { setEditing(null); setModalOpen(true); }}
-                onEdit={(row) => { setEditing(row); setModalOpen(true); }}
-                onDelete={(row) => setData((prev) => prev.filter((r) => r.id !== row.id))}
+                onNew={() => { setEditing(null); setModalError(""); setModalOpen(true); }}
+                onEdit={(row) => { setEditing(row); setModalError(""); setModalOpen(true); }}
+                onDelete={handleDelete}
                 searchPlaceholder="Buscar por nome ou schema..."
             />
             <CrudModal
                 open={modalOpen}
-                onClose={() => { setModalOpen(false); setEditing(null); }}
+                onClose={() => { setModalOpen(false); setEditing(null); setModalError(""); }}
                 onSave={handleSave}
                 title={editing ? "Editar função" : "Nova função"}
                 subtitle="Configurador — Funções"

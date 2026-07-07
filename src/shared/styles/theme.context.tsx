@@ -19,7 +19,7 @@ const getInitialTheme = (): ThemeMode => {
     return "light";
   }
   const savedTheme = window.localStorage.getItem(STORAGE_KEY);
-  if (savedTheme === "dark" || savedTheme === "light") {
+  if (savedTheme === "dark" || savedTheme === "light" || savedTheme === "colorblind") {
     return savedTheme;
   }
   return "light";
@@ -39,7 +39,10 @@ export function ThemeProvider({ children }: PropsWithChildren) {
     () => ({
       theme,
       setTheme,
-      toggleTheme: () => setTheme((prev) => (prev === "light" ? "dark" : "light")),
+      toggleTheme: () =>
+        setTheme((prev) =>
+          prev === "light" ? "dark" : prev === "dark" ? "colorblind" : "light",
+        ),
     }),
     [theme],
   );

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { MovimentationPage } from "../../../../components/pages/MovimentationPage";
 
 export const metadata = {
@@ -6,5 +7,9 @@ export const metadata = {
 };
 
 export default function Page() {
-    return <MovimentationPage />;
+    return (
+        <Suspense fallback={null}>
+            <MovimentationPage />
+        </Suspense>
+    );
 }

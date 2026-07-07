@@ -45,20 +45,32 @@ export const INSTITUTIONS: { id: InstitutionId; label: string; color: string; ab
     { id: "xp", label: "XP Investimentos", color: "#1B1A1C", abbr: "XP" },
 ];
 
-export const CATEGORIES: { id: CategoryId; label: string; color: string; bgColor: string }[] = [
-    { id: "alimentacao", label: "Alimentação", color: "#E69F00", bgColor: "#2A2200" },
-    { id: "saude", label: "Saúde", color: "#56B4E9", bgColor: "#0A1E35" },
-    { id: "educacao", label: "Educação", color: "#0072B2", bgColor: "#001530" },
-    { id: "transporte", label: "Transporte", color: "#CC79A7", bgColor: "#2A0A20" },
-    { id: "lazer", label: "Lazer", color: "#009E73", bgColor: "#002A1E" },
-    { id: "moradia", label: "Moradia", color: "#F0E442", bgColor: "#2A2800" },
-    { id: "salario", label: "Salário", color: "#56D364", bgColor: "#0F2A1A" },
-    { id: "vendas", label: "Vendas", color: "#56D364", bgColor: "#0F2A1A" },
-    { id: "tecnologia", label: "Tecnologia", color: "#56B4E9", bgColor: "#0A1E35" },
-    { id: "marketing", label: "Marketing", color: "#CC79A7", bgColor: "#2A0A20" },
-    { id: "servicos", label: "Serviços", color: "#9DAAB8", bgColor: "#1C2430" },
-    { id: "investimento", label: "Investimento", color: "#FFB74D", bgColor: "#2A1E00" },
-    { id: "outros", label: "Outros", color: "#9DAAB8", bgColor: "#1C2430" },
+/** Para quais tipos de lançamento a categoria é relevante — usada para filtrar
+ * as opções mostradas no formulário conforme o tipo (receita/despesa)
+ * selecionado, evitando categorias fora de contexto (ex.: "Salário" ao
+ * lançar uma despesa). "investimento" marca categorias com tratamento visual
+ * próprio (cor/ícone/animação), podendo aparecer tanto em receitas quanto
+ * despesas (aporte = despesa, rendimento/resgate = receita). */
+export type CategoryAppliesTo = "receita" | "despesa" | "ambos";
+
+/** Cores "base" (tom claro/color-blind safe) usadas como valor default e
+ * como fallback fora do fluxo de renderização — a maioria dos componentes
+ * resolve a cor real por tema via `resolveCategoryColor` (ver categoryPalette.ts),
+ * que adapta o tom para contraste adequado em claro/escuro/daltônico. */
+export const CATEGORIES: { id: CategoryId; label: string; color: string; bgColor: string; appliesTo: CategoryAppliesTo }[] = [
+    { id: "alimentacao", label: "Alimentação", color: "#9A5B00", bgColor: "#9A5B0020", appliesTo: "despesa" },
+    { id: "saude", label: "Saúde", color: "#0072B2", bgColor: "#0072B220", appliesTo: "despesa" },
+    { id: "educacao", label: "Educação", color: "#5B3DE0", bgColor: "#5B3DE020", appliesTo: "despesa" },
+    { id: "transporte", label: "Transporte", color: "#A6559E", bgColor: "#A6559E20", appliesTo: "despesa" },
+    { id: "lazer", label: "Lazer", color: "#00795E", bgColor: "#00795E20", appliesTo: "despesa" },
+    { id: "moradia", label: "Moradia", color: "#B8460E", bgColor: "#B8460E20", appliesTo: "despesa" },
+    { id: "salario", label: "Salário", color: "#147A34", bgColor: "#147A3420", appliesTo: "receita" },
+    { id: "vendas", label: "Vendas", color: "#00796B", bgColor: "#00796B20", appliesTo: "receita" },
+    { id: "tecnologia", label: "Tecnologia", color: "#7B3FA0", bgColor: "#7B3FA020", appliesTo: "despesa" },
+    { id: "marketing", label: "Marketing", color: "#C2185B", bgColor: "#C2185B20", appliesTo: "despesa" },
+    { id: "servicos", label: "Serviços", color: "#5F6B7A", bgColor: "#5F6B7A20", appliesTo: "ambos" },
+    { id: "investimento", label: "Investimento", color: "#8A6D00", bgColor: "#8A6D0020", appliesTo: "ambos" },
+    { id: "outros", label: "Outros", color: "#626B78", bgColor: "#626B7820", appliesTo: "ambos" },
 ];
 
 export const MOCK_TRANSACTIONS: Transaction[] = [

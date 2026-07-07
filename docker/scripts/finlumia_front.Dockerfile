@@ -59,6 +59,15 @@ RUN useradd -m -s /bin/bash finlumia \
     && chown -R finlumia:finlumia /home/finlumia /workspace
 
 WORKDIR /workspace
+USER finlumia
+
+# Instala as dependências já na imagem (aproveitando cache de camada do Docker:
+# só reinstala quando package.json/package-lock.json mudam). Isso evita rodar
+# "npm install" a cada "docker run", que era lentíssimo pelo bind mount do Windows.
+# O node_modules resultante fica dentro da imagem e é aproveitado pelo volume
+# nomeado montado em /workspace/node_modules (ver finlumia.ps1).
+COPY --chown=finlumia:finlumia package.json package-lock.json ./
+RUN npm ci
 
 EXPOSE 3000
 

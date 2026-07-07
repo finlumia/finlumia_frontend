@@ -23,7 +23,7 @@ export function PaymentMethodsPage() {
         { key: "isDefault", label: "Tipo", render: (row) => <TypeBadge isDefault={row.isDefault} f={f} /> },
         {
             key: "acoes", label: "Ações", align: "right",
-            render: (row) => <DeleteAction isDefault={row.isDefault} f={f} onDelete={() => removePaymentMethod(row.id)} label={`Excluir ${row.label}`} />,
+            render: (row) => <DeleteAction isDefault={row.isDefault} f={f} theme={theme} onDelete={() => removePaymentMethod(row.id)} label={`Excluir ${row.label}`} itemName={row.label} />,
         },
     ];
 

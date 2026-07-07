@@ -1,0 +1,408 @@
+{
+  "_meta": {
+    "title": "Finlumia — Support Helpdesk API Schema",
+    "version": "1.0.0",
+    "schema_pg": "docs",
+    "generated_at": "2026-06-28",
+    "author": "Finlumia Frontend"
+  },
+
+  "backend_prompt": "Você é um desenvolvedor backend sênior especializado em Node.js, TypeScript e PostgreSQL. Sua tarefa é implementar o módulo de helpdesk de suporte da plataforma Finlumia. Use o schema PostgreSQL 'docs' para todas as tabelas. Implemente todas as APIs REST conforme os contratos abaixo, seguindo os padrões: (1) autenticação via Bearer JWT em todos os endpoints, (2) respostas padronizadas com { data, meta, error }, (3) validação de entrada com Zod ou class-validator, (4) soft delete com campo deleted_at, (5) timestamps automáticos created_at/updated_at, (6) paginação cursor-based ou offset+limit nos endpoints de listagem, (7) controle de acesso RBAC: apenas roles 'admin' e 'gerente' acessam o portal (GET/PATCH todos tickets); usuários comuns só acessam seus próprios tickets. Use as definições de tabela e endpoints exatamente como especificado neste arquivo.",
+
+  "database": {
+    "dialect": "postgresql",
+    "schema": "docs",
+    "tables": [
+      {
+        "name": "tickets",
+        "full_name": "docs.tickets",
+        "description": "Tabela principal de tickets de suporte abertos pelos usuários da plataforma.",
+        "sql_create": "CREATE TABLE IF NOT EXISTS docs.tickets (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), ticket_code VARCHAR(20) NOT NULL UNIQUE, user_id UUID NOT NULL REFERENCES identification.users(id), title VARCHAR(255) NOT NULL, category VARCHAR(20) NOT NULL CHECK (category IN ('duvida','bug','melhoria','acesso','outros')), priority VARCHAR(10) NOT NULL CHECK (priority IN ('baixa','media','alta','urgente')), status VARCHAR(20) NOT NULL DEFAULT 'aberto' CHECK (status IN ('aberto','em_analise','respondido','fechado')), description TEXT NOT NULL, assigned_to VARCHAR(100), created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), deleted_at TIMESTAMPTZ);",
+        "indexes": [
+          "CREATE INDEX idx_tickets_user_id ON docs.tickets(user_id);",
+          "CREATE INDEX idx_tickets_status ON docs.tickets(status);",
+          "CREATE INDEX idx_tickets_category ON docs.tickets(category);",
+          "CREATE INDEX idx_tickets_created_at ON docs.tickets(created_at DESC);",
+          "CREATE UNIQUE INDEX idx_tickets_code ON docs.tickets(ticket_code) WHERE deleted_at IS NULL;"
+        ],
+        "columns": [
+          { "name": "id",          "type": "UUID",         "nullable": false, "default": "gen_random_uuid()", "description": "PK gerada automaticamente" },
+          { "name": "ticket_code", "type": "VARCHAR(20)",  "nullable": false, "unique": true,               "description": "Código legível ex: TK-2024-087, gerado pela aplicação" },
+          { "name": "user_id",     "type": "UUID",         "nullable": false, "fk": "identification.users.id", "description": "Usuário que abriu o ticket" },
+          { "name": "title",       "type": "VARCHAR(255)", "nullable": false,                               "description": "Título resumido do ticket" },
+          { "name": "category",    "type": "VARCHAR(20)",  "nullable": false,                               "description": "duvida | bug | melhoria | acesso | outros" },
+          { "name": "priority",    "type": "VARCHAR(10)",  "nullable": false, "default": "'media'",         "description": "baixa | media | alta | urgente" },
+          { "name": "status",      "type": "VARCHAR(20)",  "nullable": false, "default": "'aberto'",        "description": "aberto | em_analise | respondido | fechado" },
+          { "name": "description", "type": "TEXT",         "nullable": false,                               "description": "Descrição detalhada do problema/solicitação" },
+          { "name": "assigned_to", "type": "VARCHAR(100)", "nullable": true,                                "description": "Nome ou identificador do agente responsável" },
+          { "name": "created_at",  "type": "TIMESTAMPTZ",  "nullable": false, "default": "NOW()",           "description": "Data/hora de criação" },
+          { "name": "updated_at",  "type": "TIMESTAMPTZ",  "nullable": false, "default": "NOW()",           "description": "Data/hora da última atualização (trigger automático)" },
+          { "name": "deleted_at",  "type": "TIMESTAMPTZ",  "nullable": true,                                "description": "Soft delete — NULL = ativo" }
+        ]
+      },
+      {
+        "name": "ticket_responses",
+        "full_name": "docs.ticket_responses",
+        "description": "Histórico de respostas e comentários em um ticket. Suporta múltiplas respostas por ticket.",
+        "sql_create": "CREATE TABLE IF NOT EXISTS docs.ticket_responses (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), ticket_id UUID NOT NULL REFERENCES docs.tickets(id) ON DELETE CASCADE, author_id UUID NOT NULL REFERENCES identification.users(id), author_role VARCHAR(20) NOT NULL CHECK (author_role IN ('user','admin','gerente','suporte')), message TEXT NOT NULL, is_internal BOOLEAN NOT NULL DEFAULT FALSE, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW());",
+        "indexes": [
+          "CREATE INDEX idx_ticket_responses_ticket_id ON docs.ticket_responses(ticket_id);",
+          "CREATE INDEX idx_ticket_responses_created_at ON docs.ticket_responses(created_at DESC);"
+        ],
+        "columns": [
+          { "name": "id",          "type": "UUID",        "nullable": false, "default": "gen_random_uuid()", "description": "PK gerada automaticamente" },
+          { "name": "ticket_id",   "type": "UUID",        "nullable": false, "fk": "docs.tickets.id",        "description": "Ticket ao qual pertence a resposta" },
+          { "name": "author_id",   "type": "UUID",        "nullable": false, "fk": "identification.users.id","description": "Usuário que escreveu a mensagem" },
+          { "name": "author_role", "type": "VARCHAR(20)", "nullable": false,                                  "description": "Role do autor no momento da resposta" },
+          { "name": "message",     "type": "TEXT",        "nullable": false,                                  "description": "Conteúdo da resposta" },
+          { "name": "is_internal", "type": "BOOLEAN",     "nullable": false, "default": "FALSE",              "description": "Nota interna (não visível ao usuário final)" },
+          { "name": "created_at",  "type": "TIMESTAMPTZ", "nullable": false, "default": "NOW()",              "description": "Data/hora da resposta" },
+          { "name": "updated_at",  "type": "TIMESTAMPTZ", "nullable": false, "default": "NOW()",              "description": "Data/hora da última edição" }
+        ]
+      },
+      {
+        "name": "ticket_attachments",
+        "full_name": "docs.ticket_attachments",
+        "description": "Arquivos anexados a tickets (uploads do usuário ou do agente de suporte).",
+        "sql_create": "CREATE TABLE IF NOT EXISTS docs.ticket_attachments (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), ticket_id UUID NOT NULL REFERENCES docs.tickets(id) ON DELETE CASCADE, response_id UUID REFERENCES docs.ticket_responses(id) ON DELETE SET NULL, uploaded_by UUID NOT NULL REFERENCES identification.users(id), file_name VARCHAR(255) NOT NULL, file_size_bytes INTEGER NOT NULL, mime_type VARCHAR(100) NOT NULL, storage_path VARCHAR(500) NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW());",
+        "indexes": [
+          "CREATE INDEX idx_ticket_attachments_ticket_id ON docs.ticket_attachments(ticket_id);"
+        ],
+        "columns": [
+          { "name": "id",               "type": "UUID",         "nullable": false, "default": "gen_random_uuid()", "description": "PK" },
+          { "name": "ticket_id",        "type": "UUID",         "nullable": false, "fk": "docs.tickets.id",        "description": "Ticket ao qual o anexo pertence" },
+          { "name": "response_id",      "type": "UUID",         "nullable": true,  "fk": "docs.ticket_responses.id","description": "Resposta vinculada (opcional)" },
+          { "name": "uploaded_by",      "type": "UUID",         "nullable": false, "fk": "identification.users.id","description": "Usuário que fez o upload" },
+          { "name": "file_name",        "type": "VARCHAR(255)", "nullable": false,                                  "description": "Nome original do arquivo" },
+          { "name": "file_size_bytes",  "type": "INTEGER",      "nullable": false,                                  "description": "Tamanho em bytes" },
+          { "name": "mime_type",        "type": "VARCHAR(100)", "nullable": false,                                  "description": "Ex: image/png, application/pdf" },
+          { "name": "storage_path",     "type": "VARCHAR(500)", "nullable": false,                                  "description": "Caminho no storage (S3/MinIO/local)" },
+          { "name": "created_at",       "type": "TIMESTAMPTZ",  "nullable": false, "default": "NOW()",              "description": "Data do upload" }
+        ]
+      }
+    ],
+    "triggers": [
+      {
+        "name": "trg_tickets_updated_at",
+        "description": "Atualiza updated_at automaticamente em qualquer UPDATE na tabela tickets",
+        "sql": "CREATE OR REPLACE FUNCTION docs.set_updated_at() RETURNS TRIGGER AS $$ BEGIN NEW.updated_at = NOW(); RETURN NEW; END; $$ LANGUAGE plpgsql; CREATE TRIGGER trg_tickets_updated_at BEFORE UPDATE ON docs.tickets FOR EACH ROW EXECUTE FUNCTION docs.set_updated_at(); CREATE TRIGGER trg_ticket_responses_updated_at BEFORE UPDATE ON docs.ticket_responses FOR EACH ROW EXECUTE FUNCTION docs.set_updated_at();"
+      },
+      {
+        "name": "trg_tickets_code_gen",
+        "description": "Gera ticket_code automaticamente no formato TK-YYYY-NNN",
+        "sql": "CREATE SEQUENCE IF NOT EXISTS docs.ticket_seq START 1 INCREMENT 1; CREATE OR REPLACE FUNCTION docs.generate_ticket_code() RETURNS TRIGGER AS $$ BEGIN IF NEW.ticket_code IS NULL OR NEW.ticket_code = '' THEN NEW.ticket_code := 'TK-' || EXTRACT(YEAR FROM NOW())::TEXT || '-' || LPAD(nextval('docs.ticket_seq')::TEXT, 3, '0'); END IF; RETURN NEW; END; $$ LANGUAGE plpgsql; CREATE TRIGGER trg_tickets_code_gen BEFORE INSERT ON docs.tickets FOR EACH ROW EXECUTE FUNCTION docs.generate_ticket_code();"
+      }
+    ]
+  },
+
+  "api": {
+    "base_path": "/api/v1/support",
+    "auth": "Bearer JWT (Authorization header obrigatório em todos os endpoints)",
+    "response_envelope": {
+      "success": { "data": "<payload>", "meta": { "page": 1, "limit": 20, "total": 100 } },
+      "error":   { "error": { "code": "TICKET_NOT_FOUND", "message": "Ticket não encontrado." } }
+    },
+    "endpoints": [
+      {
+        "id": "list-tickets",
+        "method": "GET",
+        "path": "/api/v1/support/tickets",
+        "description": "Lista todos os tickets com filtros e paginação. Admin/Gerente veem todos; usuário comum vê apenas os seus.",
+        "auth_roles": ["admin", "gerente", "user"],
+        "query_params": [
+          { "name": "status",    "type": "string",  "required": false, "enum": ["aberto","em_analise","respondido","fechado"], "description": "Filtrar por status" },
+          { "name": "category",  "type": "string",  "required": false, "enum": ["duvida","bug","melhoria","acesso","outros"],  "description": "Filtrar por categoria" },
+          { "name": "priority",  "type": "string",  "required": false, "enum": ["baixa","media","alta","urgente"],             "description": "Filtrar por prioridade" },
+          { "name": "search",    "type": "string",  "required": false, "description": "Busca textual em ticket_code, title e user name" },
+          { "name": "user_id",   "type": "uuid",    "required": false, "description": "Filtrar por usuário (apenas admin/gerente)" },
+          { "name": "page",      "type": "integer", "required": false, "default": 1, "description": "Número da página" },
+          { "name": "limit",     "type": "integer", "required": false, "default": 20, "max": 100, "description": "Itens por página" },
+          { "name": "sort",      "type": "string",  "required": false, "default": "created_at:desc", "description": "Ordenação ex: created_at:desc, priority:asc" }
+        ],
+        "response_200": {
+          "data": [
+            {
+              "id": "uuid",
+              "ticket_code": "TK-2024-087",
+              "user": { "id": "uuid", "name": "Ana Costa", "email": "ana@empresa.com" },
+              "title": "Erro ao importar extrato OFX do Nubank",
+              "category": "bug",
+              "priority": "alta",
+              "status": "aberto",
+              "description": "...",
+              "assigned_to": null,
+              "response_count": 0,
+              "created_at": "2024-06-28T10:30:00Z",
+              "updated_at": "2024-06-28T10:30:00Z"
+            }
+          ],
+          "meta": { "page": 1, "limit": 20, "total": 7, "total_pages": 1 }
+        }
+      },
+      {
+        "id": "create-ticket",
+        "method": "POST",
+        "path": "/api/v1/support/tickets",
+        "description": "Cria um novo ticket de suporte. O user_id é extraído do JWT.",
+        "auth_roles": ["admin", "gerente", "user"],
+        "request_body": {
+          "content_type": "application/json",
+          "schema": {
+            "title":       { "type": "string",  "required": true,  "min": 5, "max": 255, "description": "Título do ticket" },
+            "category":    { "type": "string",  "required": true,  "enum": ["duvida","bug","melhoria","acesso","outros"] },
+            "priority":    { "type": "string",  "required": false, "default": "media", "enum": ["baixa","media","alta","urgente"] },
+            "description": { "type": "string",  "required": true,  "min": 20, "description": "Descrição detalhada" }
+          },
+          "example": {
+            "title": "Erro ao importar extrato OFX do Nubank",
+            "category": "bug",
+            "priority": "alta",
+            "description": "Ao tentar importar o extrato no formato OFX, a plataforma retorna erro genérico."
+          }
+        },
+        "response_201": {
+          "data": {
+            "id": "uuid",
+            "ticket_code": "TK-2024-088",
+            "user_id": "uuid",
+            "title": "Erro ao importar extrato OFX do Nubank",
+            "category": "bug",
+            "priority": "alta",
+            "status": "aberto",
+            "description": "Ao tentar importar o extrato no formato OFX, a plataforma retorna erro genérico.",
+            "assigned_to": null,
+            "created_at": "2024-06-28T11:00:00Z",
+            "updated_at": "2024-06-28T11:00:00Z"
+          }
+        },
+        "errors": [
+          { "status": 400, "code": "VALIDATION_ERROR", "description": "Campos inválidos ou ausentes" }
+        ]
+      },
+      {
+        "id": "get-ticket",
+        "method": "GET",
+        "path": "/api/v1/support/tickets/:id",
+        "description": "Retorna detalhes completos de um ticket incluindo todas as respostas. Usuário comum só acessa os próprios tickets.",
+        "auth_roles": ["admin", "gerente", "user"],
+        "path_params": [
+          { "name": "id", "type": "uuid", "description": "ID do ticket" }
+        ],
+        "response_200": {
+          "data": {
+            "id": "uuid",
+            "ticket_code": "TK-2024-087",
+            "user": { "id": "uuid", "name": "Ana Costa", "email": "ana@empresa.com" },
+            "title": "Erro ao importar extrato OFX do Nubank",
+            "category": "bug",
+            "priority": "alta",
+            "status": "aberto",
+            "description": "Ao tentar importar o extrato do Nubank no formato OFX...",
+            "assigned_to": "Suporte Thiago",
+            "responses": [
+              {
+                "id": "uuid",
+                "author": { "id": "uuid", "name": "Suporte Thiago", "role": "admin" },
+                "message": "Olá Ana! Estamos investigando o problema...",
+                "is_internal": false,
+                "created_at": "2024-06-28T12:00:00Z"
+              }
+            ],
+            "attachments": [],
+            "created_at": "2024-06-28T10:30:00Z",
+            "updated_at": "2024-06-28T12:00:00Z"
+          }
+        },
+        "errors": [
+          { "status": 404, "code": "TICKET_NOT_FOUND", "description": "Ticket não existe ou foi deletado" },
+          { "status": 403, "code": "FORBIDDEN", "description": "Usuário não tem permissão para ver este ticket" }
+        ]
+      },
+      {
+        "id": "update-ticket",
+        "method": "PATCH",
+        "path": "/api/v1/support/tickets/:id",
+        "description": "Atualiza status, prioridade ou atribuição de um ticket. Restrito a admin/gerente.",
+        "auth_roles": ["admin", "gerente"],
+        "path_params": [
+          { "name": "id", "type": "uuid", "description": "ID do ticket" }
+        ],
+        "request_body": {
+          "content_type": "application/json",
+          "schema": {
+            "status":      { "type": "string", "required": false, "enum": ["aberto","em_analise","respondido","fechado"] },
+            "priority":    { "type": "string", "required": false, "enum": ["baixa","media","alta","urgente"] },
+            "assigned_to": { "type": "string", "required": false, "nullable": true, "max": 100 }
+          },
+          "example": {
+            "status": "em_analise",
+            "assigned_to": "Suporte Thiago"
+          }
+        },
+        "response_200": {
+          "data": {
+            "id": "uuid",
+            "ticket_code": "TK-2024-087",
+            "status": "em_analise",
+            "assigned_to": "Suporte Thiago",
+            "updated_at": "2024-06-28T12:30:00Z"
+          }
+        },
+        "errors": [
+          { "status": 404, "code": "TICKET_NOT_FOUND" },
+          { "status": 403, "code": "FORBIDDEN" }
+        ]
+      },
+      {
+        "id": "add-response",
+        "method": "POST",
+        "path": "/api/v1/support/tickets/:id/responses",
+        "description": "Adiciona uma resposta ao ticket. Admin/gerente podem marcar como nota interna. Ao adicionar resposta, status pode ser alterado automaticamente para 'respondido'.",
+        "auth_roles": ["admin", "gerente", "user"],
+        "path_params": [
+          { "name": "id", "type": "uuid", "description": "ID do ticket" }
+        ],
+        "request_body": {
+          "content_type": "application/json",
+          "schema": {
+            "message":     { "type": "string",  "required": true, "min": 1, "description": "Texto da resposta" },
+            "is_internal": { "type": "boolean", "required": false, "default": false, "description": "Nota interna (apenas admin/gerente podem usar true)" },
+            "new_status":  { "type": "string",  "required": false, "enum": ["aberto","em_analise","respondido","fechado"], "description": "Novo status a ser aplicado ao ticket junto com a resposta" }
+          },
+          "example": {
+            "message": "Olá Rafael! Para exportar em PDF, acesse Relatórios e clique em 'Exportar'.",
+            "is_internal": false,
+            "new_status": "respondido"
+          }
+        },
+        "response_201": {
+          "data": {
+            "id": "uuid",
+            "ticket_id": "uuid",
+            "author": { "id": "uuid", "name": "Suporte Thiago", "role": "admin" },
+            "message": "Olá Rafael! Para exportar em PDF, acesse Relatórios e clique em 'Exportar'.",
+            "is_internal": false,
+            "created_at": "2024-06-28T13:00:00Z"
+          }
+        },
+        "errors": [
+          { "status": 404, "code": "TICKET_NOT_FOUND" },
+          { "status": 403, "code": "FORBIDDEN", "description": "Ticket fechado não pode receber respostas" }
+        ]
+      },
+      {
+        "id": "list-responses",
+        "method": "GET",
+        "path": "/api/v1/support/tickets/:id/responses",
+        "description": "Lista todas as respostas de um ticket em ordem cronológica. Usuário comum não vê notas internas.",
+        "auth_roles": ["admin", "gerente", "user"],
+        "path_params": [
+          { "name": "id", "type": "uuid" }
+        ],
+        "response_200": {
+          "data": [
+            {
+              "id": "uuid",
+              "author": { "id": "uuid", "name": "Suporte Thiago", "role": "admin" },
+              "message": "Olá! Estamos investigando.",
+              "is_internal": false,
+              "created_at": "2024-06-28T12:00:00Z"
+            }
+          ]
+        }
+      },
+      {
+        "id": "delete-ticket",
+        "method": "DELETE",
+        "path": "/api/v1/support/tickets/:id",
+        "description": "Soft delete de um ticket (define deleted_at). Apenas admin.",
+        "auth_roles": ["admin"],
+        "path_params": [
+          { "name": "id", "type": "uuid" }
+        ],
+        "response_204": null,
+        "errors": [
+          { "status": 404, "code": "TICKET_NOT_FOUND" },
+          { "status": 403, "code": "FORBIDDEN" }
+        ]
+      },
+      {
+        "id": "get-stats",
+        "method": "GET",
+        "path": "/api/v1/support/tickets/stats",
+        "description": "Retorna contadores agregados por status e por categoria. Apenas admin/gerente.",
+        "auth_roles": ["admin", "gerente"],
+        "query_params": [
+          { "name": "from", "type": "date", "required": false, "description": "Data inicial (YYYY-MM-DD)" },
+          { "name": "to",   "type": "date", "required": false, "description": "Data final (YYYY-MM-DD)" }
+        ],
+        "response_200": {
+          "data": {
+            "by_status": {
+              "aberto":     2,
+              "em_analise": 2,
+              "respondido": 1,
+              "fechado":    2
+            },
+            "by_category": {
+              "bug":      3,
+              "duvida":   2,
+              "melhoria": 1,
+              "acesso":   1,
+              "outros":   0
+            },
+            "by_priority": {
+              "urgente": 0,
+              "alta":    3,
+              "media":   2,
+              "baixa":   2
+            },
+            "total": 7,
+            "avg_resolution_hours": 18.5
+          }
+        }
+      },
+      {
+        "id": "upload-attachment",
+        "method": "POST",
+        "path": "/api/v1/support/tickets/:id/attachments",
+        "description": "Faz upload de um arquivo anexado ao ticket. Limite de 10MB por arquivo.",
+        "auth_roles": ["admin", "gerente", "user"],
+        "path_params": [
+          { "name": "id", "type": "uuid" }
+        ],
+        "request_body": {
+          "content_type": "multipart/form-data",
+          "schema": {
+            "file":        { "type": "file", "required": true, "max_size_bytes": 10485760, "allowed_mime": ["image/png","image/jpeg","image/webp","application/pdf","text/plain","text/csv"] },
+            "response_id": { "type": "uuid", "required": false, "description": "Vincula o anexo a uma resposta específica" }
+          }
+        },
+        "response_201": {
+          "data": {
+            "id": "uuid",
+            "file_name": "extrato_nubank.ofx",
+            "file_size_bytes": 204800,
+            "mime_type": "text/plain",
+            "url": "/api/v1/support/tickets/:id/attachments/:attachment_id/download",
+            "created_at": "2024-06-28T14:00:00Z"
+          }
+        },
+        "errors": [
+          { "status": 413, "code": "FILE_TOO_LARGE", "description": "Arquivo excede 10MB" },
+          { "status": 415, "code": "UNSUPPORTED_MEDIA", "description": "Tipo de arquivo não permitido" }
+        ]
+      }
+    ]
+  },
+
+  "implementation_notes": {
+    "ticket_code_generation": "O trigger docs.generate_ticket_code() gera automaticamente o código no formato TK-YYYY-NNN. Não envie ticket_code no body do POST /tickets.",
+    "rbac_rules": "Extraia o user_id e role do JWT. Se role não for 'admin' nem 'gerente', filtre automaticamente por user_id em GET /tickets e valide ownership em GET /tickets/:id.",
+    "auto_status_on_response": "Ao criar uma resposta via POST /tickets/:id/responses com new_status='respondido', atualize o status do ticket na mesma transação.",
+    "soft_delete": "Todos os SELECTs devem incluir WHERE deleted_at IS NULL. O DELETE endpoint só marca deleted_at.",
+    "pagination": "Use LIMIT/OFFSET com meta.total calculado via COUNT(*) OVER() na mesma query para eficiência.",
+    "internal_notes": "Respostas com is_internal=true são visíveis apenas para roles admin/gerente. Filtre no SELECT ao retornar respostas para usuários comuns.",
+    "timestamps": "Use o trigger trg_tickets_updated_at para atualizar updated_at automaticamente. Não atualize manualmente no código."
+  }
+}

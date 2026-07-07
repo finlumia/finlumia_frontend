@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import { Input } from "../atoms/input";
 import { Button } from "../atoms/button";
 import { getFoundationByTheme } from "../../shared/styles/tokens";
+import { getAppBackground } from "../../shared/styles/appBackground";
 import { useTheme } from "../../shared/styles/theme.context";
+import { authService } from "../../services/identification/auth.service";
 
 type Step = "email" | "sent";
 
@@ -18,6 +20,8 @@ export function ForgotPasswordPage() {
     const [step, setStep] = useState<Step>("email");
     const [email, setEmail] = useState("");
     const [emailError, setEmailError] = useState("");
+    const [apiError, setApiError] = useState("");
+    const [isLoading, setIsLoading] = useState(false);
 
     const validate = () => {
         if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -28,10 +32,22 @@ export function ForgotPasswordPage() {
         return true;
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (validate()) {
+        if (!validate()) return;
+
+        setApiError("");
+        setIsLoading(true);
+        try {
+            await authService.forgotPassword({ email });
+            // Salva o email na sessão para a tela de redefinição usar
+            sessionStorage.setItem("finlumia:reset_email", email);
             setStep("sent");
+        } catch (err: unknown) {
+            const msg = (err as { message?: string })?.message ?? "Erro ao enviar o código. Tente novamente.";
+            setApiError(msg);
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -43,7 +59,7 @@ export function ForgotPasswordPage() {
     return (
         <div style={{
             minHeight: "100vh",
-            backgroundColor: f.colors.bg.app,
+            ...getAppBackground(theme),
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -81,7 +97,6 @@ export function ForgotPasswordPage() {
                 }}>
                     {step === "email" ? (
                         <>
-                            {/* Icon */}
                             <div style={{
                                 width: "5.6rem",
                                 height: "5.6rem",
@@ -105,6 +120,20 @@ export function ForgotPasswordPage() {
                                 Digite o e-mail associado à sua conta. Enviaremos um código de verificação para você redefinir sua senha.
                             </p>
 
+                            {apiError && (
+                                <div style={{
+                                    backgroundColor: isDark ? f.colors.feedback.errorBg : "#FEF2F2",
+                                    border: `1px solid ${f.colors.feedback.error}`,
+                                    borderRadius: "0.8rem",
+                                    padding: "1.2rem 1.6rem",
+                                    marginBottom: "1.6rem",
+                                    fontSize: "1.3rem",
+                                    color: f.colors.feedback.error,
+                                }}>
+                                    {apiError}
+                                </div>
+                            )}
+
                             <form onSubmit={handleSubmit} noValidate style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
                                 <Input
                                     id="recovery-email"
@@ -120,7 +149,7 @@ export function ForgotPasswordPage() {
                                     onChange={(e) => setEmail(e.target.value)}
                                 />
                                 <Button
-                                    label="Enviar código de verificação"
+                                    label={isLoading ? "Enviando..." : "Enviar código de verificação"}
                                     type="submit"
                                     theme={theme}
                                     variant="primary"
@@ -135,13 +164,13 @@ export function ForgotPasswordPage() {
                                         height: "4.4rem",
                                         fontSize: "1.5rem",
                                         fontWeight: "600",
+                                        opacity: isLoading ? "0.7" : "1",
                                     }}
                                 />
                             </form>
                         </>
                     ) : (
                         <>
-                            {/* Success state */}
                             <div style={{
                                 width: "5.6rem",
                                 height: "5.6rem",

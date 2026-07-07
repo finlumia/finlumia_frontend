@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Modal } from "../Modal";
 import { Input } from "../../atoms/input";
 import { Button } from "../../atoms/button";
@@ -8,8 +8,10 @@ import {
     type Transaction, type TransactionType,
 } from "../../../config/transactions";
 import { useFinance } from "../../../shared/finance/finance.context";
+import { resolveCategoryColor } from "../../../config/categoryPalette";
 import { getFoundationByTheme } from "../../../shared/styles/tokens";
 import type { ThemeMode } from "../../../shared/styles/theme.types";
+import { parseMoney, maskCurrencyInput, amountToMaskedInput } from "../../../lib/money";
 
 type Step = 1 | 2;
 
@@ -38,19 +40,46 @@ const EMPTY: FormData = {
 type NewTransactionModalProps = {
     open: boolean;
     onClose: () => void;
-    onSave: (t: Omit<Transaction, "id">) => void;
+    onSave: (t: Omit<Transaction, "id">) => Promise<void> | void;
     theme?: ThemeMode;
+    /** Quando informado, o modal abre em modo de edição pré-preenchido com esses dados. */
+    initial?: Transaction | null;
 };
 
-export function NewTransactionModal({ open, onClose, onSave, theme = "dark" }: NewTransactionModalProps) {
+export function NewTransactionModal({ open, onClose, onSave, theme = "dark", initial = null }: NewTransactionModalProps) {
     const f = getFoundationByTheme(theme);
     const { categories, banks, paymentMethods } = useFinance();
+    const isEdit = !!initial;
     const [step, setStep] = useState<Step>(1);
     const [form, setForm] = useState<FormData>(EMPTY);
     const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
+    const [isSaving, setIsSaving] = useState(false);
+    const [saveError, setSaveError] = useState("");
 
     const set = <K extends keyof FormData>(key: K, value: FormData[K]) =>
         setForm((p) => ({ ...p, [key]: value }));
+
+    // Preenche o formulário ao abrir. Depende só de `open` (não de `initial`)
+    // — como CrudModal, manter `initial` nas deps recriaria o reset a cada
+    // keystroke sempre que o objeto de referência mudasse entre renders.
+    useEffect(() => {
+        if (!open) return;
+        setStep(1);
+        setErrors({});
+        setSaveError("");
+        setIsSaving(false);
+        setForm(initial ? {
+            type: initial.type,
+            method: initial.method,
+            institution: initial.institution,
+            date: initial.date,
+            category: initial.category,
+            description: initial.description,
+            amount: amountToMaskedInput(initial.amount),
+            notes: initial.notes ?? "",
+        } : EMPTY);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open]);
 
     const validateStep1 = () => {
         const e: typeof errors = {};
@@ -65,7 +94,7 @@ export function NewTransactionModal({ open, onClose, onSave, theme = "dark" }: N
         if (!form.date) e.date = "Informe a data.";
         if (!form.category) e.category = "Selecione a categoria.";
         if (!form.description.trim()) e.description = "Informe a descrição.";
-        const amt = parseFloat(form.amount.replace(",", "."));
+        const amt = parseMoney(form.amount);
         if (!form.amount || isNaN(amt) || amt <= 0) e.amount = "Informe um valor válido.";
         setErrors(e);
         return Object.keys(e).length === 0;
@@ -75,22 +104,32 @@ export function NewTransactionModal({ open, onClose, onSave, theme = "dark" }: N
         setStep(1);
         setForm(EMPTY);
         setErrors({});
+        setSaveError("");
+        setIsSaving(false);
         onClose();
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
         if (!validateStep2()) return;
-        onSave({
-            type: form.type,
-            method: form.method,
-            institution: form.institution,
-            date: form.date,
-            category: form.category,
-            description: form.description,
-            amount: parseFloat(form.amount.replace(",", ".")),
-            notes: form.notes || undefined,
-        });
-        handleClose();
+        setIsSaving(true);
+        setSaveError("");
+        try {
+            await onSave({
+                type: form.type,
+                method: form.method,
+                institution: form.institution,
+                date: form.date,
+                category: form.category,
+                description: form.description,
+                amount: parseMoney(form.amount),
+                notes: form.notes || undefined,
+            });
+            handleClose();
+        } catch (err: unknown) {
+            setSaveError((err as { message?: string })?.message ?? "Erro ao salvar. Tente novamente.");
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const primaryColor = f.colors.brand.primary;
@@ -151,12 +190,13 @@ export function NewTransactionModal({ open, onClose, onSave, theme = "dark" }: N
             <button
                 type="button"
                 onClick={() => setStep(1)}
-                style={{ background: "none", border: "none", color: textMuted, fontSize: "1.4rem", cursor: "pointer", fontFamily: "inherit", padding: "0 1.2rem" }}
+                disabled={isSaving}
+                style={{ background: "none", border: "none", color: textMuted, fontSize: "1.4rem", cursor: isSaving ? "not-allowed" : "pointer", fontFamily: "inherit", padding: "0 1.2rem" }}
             >
                 ← Voltar
             </button>
             <Button
-                label="Salvar lançamento"
+                label={isSaving ? "Salvando..." : isEdit ? "Salvar alterações" : "Salvar lançamento"}
                 type="button"
                 theme={theme}
                 variant="primary"
@@ -171,12 +211,24 @@ export function NewTransactionModal({ open, onClose, onSave, theme = "dark" }: N
         <Modal
             open={open}
             onClose={handleClose}
-            title="Novo lançamento"
+            title={isEdit ? "Editar lançamento" : "Novo lançamento"}
             subtitle="Movimentações"
             size="md"
             theme={theme}
             footer={footer}
         >
+            {/* Error banner */}
+            {saveError && (
+                <div style={{
+                    marginBottom: "1.6rem", padding: "1rem 1.4rem", borderRadius: "0.8rem",
+                    backgroundColor: isDark ? f.colors.feedback.errorBg : "#FEF2F2",
+                    border: `1px solid ${f.colors.feedback.error}`,
+                    color: f.colors.feedback.error, fontSize: "1.3rem",
+                }}>
+                    {saveError}
+                </div>
+            )}
+
             {/* Step indicator */}
             <div style={{ display: "flex", alignItems: "center", gap: "0.8rem", marginBottom: "2rem" }}>
                 {([1, 2] as Step[]).map((s) => (
@@ -220,7 +272,14 @@ export function NewTransactionModal({ open, onClose, onSave, theme = "dark" }: N
                                     <button
                                         key={t}
                                         type="button"
-                                        onClick={() => set("type", t)}
+                                        onClick={() => {
+                                            setForm((p) => {
+                                                const stillValid = p.category
+                                                    ? categories.find((c) => c.id === p.category)?.appliesTo !== (t === "receita" ? "despesa" : "receita")
+                                                    : true;
+                                                return { ...p, type: t, category: stillValid ? p.category : "" };
+                                            });
+                                        }}
                                         style={isActive ? activeChip(color) : inactiveChip}
                                     >
                                         {t === "receita" ? "▲ Receita" : "▼ Despesa"}
@@ -307,8 +366,7 @@ export function NewTransactionModal({ open, onClose, onSave, theme = "dark" }: N
                         id="tx-date"
                         name="date"
                         label="Data da transação"
-                        type="text"
-                        placeholder="yyyy-mm-dd"
+                        type="date"
                         value={form.date}
                         theme={theme}
                         error={errors.date}
@@ -322,23 +380,30 @@ export function NewTransactionModal({ open, onClose, onSave, theme = "dark" }: N
                             Categoria {errors.category && <span style={{ color: f.colors.feedback.error, fontWeight: 400 }}>— {errors.category}</span>}
                         </label>
                         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.6rem" }}>
-                            {categories.map((cat) => {
-                                const isActive = form.category === cat.id;
-                                return (
-                                    <button
-                                        key={cat.id}
-                                        type="button"
-                                        onClick={() => set("category", cat.id)}
-                                        style={isActive
-                                            ? { ...chipBase, backgroundColor: isDark ? cat.bgColor : `${cat.color}18`, borderColor: cat.color, color: cat.color }
-                                            : inactiveChip
-                                        }
-                                    >
-                                        {cat.label}
-                                    </button>
-                                );
-                            })}
+                            {categories
+                                .filter((cat) => cat.appliesTo === "ambos" || cat.appliesTo === form.type)
+                                .map((cat) => {
+                                    const isActive = form.category === cat.id;
+                                    const isInvestimento = cat.id === "investimento";
+                                    const { fg, bg, border } = resolveCategoryColor(cat.id, theme, cat.color);
+                                    return (
+                                        <button
+                                            key={cat.id}
+                                            type="button"
+                                            onClick={() => set("category", cat.id)}
+                                            style={isActive
+                                                ? { ...chipBase, backgroundColor: bg, borderColor: border, color: fg }
+                                                : inactiveChip
+                                            }
+                                        >
+                                            {isInvestimento ? "✦ " : ""}{cat.label}
+                                        </button>
+                                    );
+                                })}
                         </div>
+                        <p style={{ fontSize: "1.1rem", color: textMuted, marginTop: "0.6rem" }}>
+                            Mostrando só categorias de {form.type === "receita" ? "receita" : "despesa"} (+ categorias que servem para os dois tipos).
+                        </p>
                     </div>
 
                     <Input
@@ -359,12 +424,13 @@ export function NewTransactionModal({ open, onClose, onSave, theme = "dark" }: N
                         name="amount"
                         label="Valor (R$)"
                         type="text"
+                        inputMode="decimal"
                         placeholder="0,00"
                         value={form.amount}
                         theme={theme}
                         error={errors.amount}
                         required
-                        onChange={(e) => set("amount", e.target.value)}
+                        onChange={(e) => set("amount", maskCurrencyInput(e.target.value))}
                     />
 
                     <Input

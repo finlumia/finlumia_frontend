@@ -5,8 +5,8 @@
     "description": "Lançamentos financeiros: criação, listagem, atualização, exclusão, importação de extrato e classificação automática.",
     "baseUrls": {
       "local":       "http://localhost:8080/movimentation",
-      "homologation":"https://api-hom.finlumia.com/movimentation",
-      "production":  "https://api.finlumia.com/movimentation"
+      "homologation":"https://<seu-host-homologacao>/movimentation",
+      "production":  "https://apifinlumia.thiagobenevide.com.br/movimentation"
     }
   },
 

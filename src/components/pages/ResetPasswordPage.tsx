@@ -1,11 +1,14 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Input } from "../atoms/input";
 import { Button } from "../atoms/button";
+import { OtpInput } from "../molecules/OtpInput";
 import { getFoundationByTheme } from "../../shared/styles/tokens";
+import { getAppBackground } from "../../shared/styles/appBackground";
 import { useTheme } from "../../shared/styles/theme.context";
+import { authService } from "../../services/identification/auth.service";
 
 type Step = "token" | "password" | "success";
 
@@ -16,43 +19,47 @@ export function ResetPasswordPage() {
     const isDark = theme === "dark";
 
     const [step, setStep] = useState<Step>("token");
+    const [email, setEmail] = useState("");
+    const [resetSession, setResetSession] = useState("");
     const [token, setToken] = useState(["", "", "", "", "", ""]);
     const [tokenError, setTokenError] = useState("");
     const [password, setPassword] = useState("");
     const [confirm, setConfirm] = useState("");
     const [passwordError, setPasswordError] = useState("");
     const [confirmError, setConfirmError] = useState("");
+    const [apiError, setApiError] = useState("");
+    const [isLoading, setIsLoading] = useState(false);
 
-    const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+    // Recupera o email salvo pela tela de forgot-password
+    useEffect(() => {
+        const saved = sessionStorage.getItem("finlumia:reset_email") ?? "";
+        setEmail(saved);
+    }, []);
 
     const cardBg = isDark ? f.colors.bg.surface : "#FFFFFF";
     const borderColor = f.colors.border.default;
     const primaryColor = f.colors.brand.primary;
     const mutedColor = f.colors.text.muted;
 
-    const handleTokenInput = (index: number, value: string) => {
-        if (!/^\d?$/.test(value)) return;
-        const next = [...token];
-        next[index] = value;
-        setToken(next);
-        if (value && index < 5) {
-            inputRefs.current[index + 1]?.focus();
-        }
-    };
-
-    const handleTokenKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === "Backspace" && !token[index] && index > 0) {
-            inputRefs.current[index - 1]?.focus();
-        }
-    };
-
-    const validateToken = () => {
-        if (token.join("").length < 6) {
+    const handleVerifyToken = async () => {
+        const otp = token.join("");
+        if (otp.length < 6) {
             setTokenError("Digite o código completo de 6 dígitos.");
-            return false;
+            return;
         }
         setTokenError("");
-        return true;
+        setApiError("");
+        setIsLoading(true);
+        try {
+            const res = await authService.verifyResetToken({ email, token: otp });
+            setResetSession(res.resetSession);
+            setStep("password");
+        } catch (err: unknown) {
+            const msg = (err as { message?: string })?.message ?? "Código inválido ou expirado.";
+            setApiError(msg);
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const validatePassword = () => {
@@ -73,6 +80,26 @@ export function ResetPasswordPage() {
         return valid;
     };
 
+    const handleResetPassword = async () => {
+        if (!validatePassword()) return;
+        setApiError("");
+        setIsLoading(true);
+        try {
+            await authService.resetPassword({
+                resetSession,
+                newPassword: password,
+                confirmPassword: confirm,
+            });
+            sessionStorage.removeItem("finlumia:reset_email");
+            setStep("success");
+        } catch (err: unknown) {
+            const msg = (err as { message?: string })?.message ?? "Erro ao redefinir senha. Tente novamente.";
+            setApiError(msg);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     const passwordStrength = (): { label: string; color: string; width: string } => {
         if (password.length === 0) return { label: "", color: "transparent", width: "0%" };
         if (password.length < 6) return { label: "Fraca", color: f.colors.feedback.error, width: "25%" };
@@ -86,7 +113,7 @@ export function ResetPasswordPage() {
     return (
         <div style={{
             minHeight: "100vh",
-            backgroundColor: f.colors.bg.app,
+            ...getAppBackground(theme),
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -123,6 +150,21 @@ export function ResetPasswordPage() {
                     padding: "3.2rem",
                     boxShadow: isDark ? "none" : "0 4px 24px rgba(0,0,0,0.08)",
                 }}>
+                    {/* Erro de API */}
+                    {apiError && (
+                        <div style={{
+                            backgroundColor: isDark ? f.colors.feedback.errorBg : "#FEF2F2",
+                            border: `1px solid ${f.colors.feedback.error}`,
+                            borderRadius: "0.8rem",
+                            padding: "1.2rem 1.6rem",
+                            marginBottom: "2rem",
+                            fontSize: "1.3rem",
+                            color: f.colors.feedback.error,
+                        }}>
+                            {apiError}
+                        </div>
+                    )}
+
                     {/* Step: Token */}
                     {step === "token" && (
                         <>
@@ -145,50 +187,15 @@ export function ResetPasswordPage() {
                                 Digite os 6 dígitos enviados para o seu e-mail.
                             </p>
 
-                            {/* OTP Input */}
-                            <div style={{ display: "flex", gap: "0.8rem", justifyContent: "center", marginBottom: "0.8rem" }}>
-                                {token.map((digit, i) => (
-                                    <input
-                                        key={i}
-                                        ref={(el) => { inputRefs.current[i] = el; }}
-                                        type="text"
-                                        inputMode="numeric"
-                                        maxLength={1}
-                                        value={digit}
-                                        onChange={(e) => handleTokenInput(i, e.target.value)}
-                                        onKeyDown={(e) => handleTokenKeyDown(i, e)}
-                                        aria-label={`Dígito ${i + 1} do código`}
-                                        style={{
-                                            width: "4.8rem",
-                                            height: "5.6rem",
-                                            textAlign: "center",
-                                            fontSize: "2rem",
-                                            fontWeight: 700,
-                                            borderRadius: "0.8rem",
-                                            border: `2px solid ${tokenError ? f.colors.feedback.error : digit ? primaryColor : borderColor}`,
-                                            backgroundColor: isDark ? f.colors.bg.elevated : "#F5F7FA",
-                                            color: f.colors.text.primary,
-                                            fontFamily: "inherit",
-                                            outline: "none",
-                                            transition: "border-color 0.15s ease",
-                                        }}
-                                    />
-                                ))}
-                            </div>
-
-                            {tokenError && (
-                                <p style={{ color: f.colors.feedback.error, fontSize: "1.2rem", textAlign: "center", marginBottom: "1.2rem" }}>
-                                    ⚠ {tokenError}
-                                </p>
-                            )}
+                            <OtpInput value={token} onChange={setToken} theme={theme} error={tokenError} />
 
                             <Button
-                                label="Verificar código"
+                                label={isLoading ? "Verificando..." : "Verificar código"}
                                 type="button"
                                 theme={theme}
                                 variant="primary"
                                 size="lg"
-                                onClick={() => { if (validateToken()) setStep("password"); }}
+                                onClick={handleVerifyToken}
                                 styleConfig={{
                                     width: "100%",
                                     backgroudColor: primaryColor,
@@ -199,6 +206,7 @@ export function ResetPasswordPage() {
                                     fontSize: "1.5rem",
                                     fontWeight: "600",
                                     display: "flex",
+                                    opacity: isLoading ? "0.7" : "1",
                                 }}
                             />
                         </>
@@ -229,7 +237,6 @@ export function ResetPasswordPage() {
                                         autoComplete="new-password"
                                         onChange={(e) => setPassword(e.target.value)}
                                     />
-                                    {/* Strength meter */}
                                     {password.length > 0 && (
                                         <div style={{ marginTop: "0.6rem" }}>
                                             <div style={{ height: "4px", backgroundColor: borderColor, borderRadius: "2px", overflow: "hidden" }}>
@@ -262,7 +269,6 @@ export function ResetPasswordPage() {
                                     onChange={(e) => setConfirm(e.target.value)}
                                 />
 
-                                {/* Requirements */}
                                 <ul style={{ margin: 0, padding: "0 0 0 1.2rem", listStyle: "none" }}>
                                     {[
                                         { ok: password.length >= 8, label: "Mínimo de 8 caracteres" },
@@ -283,12 +289,12 @@ export function ResetPasswordPage() {
                                 </ul>
 
                                 <Button
-                                    label="Redefinir senha"
+                                    label={isLoading ? "Redefinindo..." : "Redefinir senha"}
                                     type="button"
                                     theme={theme}
                                     variant="primary"
                                     size="lg"
-                                    onClick={() => { if (validatePassword()) setStep("success"); }}
+                                    onClick={handleResetPassword}
                                     styleConfig={{
                                         width: "100%",
                                         backgroudColor: primaryColor,
@@ -299,6 +305,7 @@ export function ResetPasswordPage() {
                                         fontSize: "1.5rem",
                                         fontWeight: "600",
                                         display: "flex",
+                                        opacity: isLoading ? "0.7" : "1",
                                     }}
                                 />
                             </div>

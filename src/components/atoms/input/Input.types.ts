@@ -2,7 +2,7 @@ import type React from "react";
 import type { ThemeMode } from "../../../shared/styles/theme.types";
 
 export type InputSize = "sm" | "md" | "lg";
-export type InputType = "text" | "email" | "password" | "number" | "tel" | "search";
+export type InputType = "text" | "email" | "password" | "number" | "tel" | "search" | "date";
 
 export type InputProps = {
     id: string;
@@ -22,6 +22,7 @@ export type InputProps = {
     iconPosition?: "left" | "right";
     required?: boolean;
     autoComplete?: string;
+    inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
     onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void;
     onFocus?: (e: React.FocusEvent<HTMLInputElement>) => void;

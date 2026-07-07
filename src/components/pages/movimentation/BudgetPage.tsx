@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import { parseMoney } from "../../../lib/money";
 import { Modal } from "../../organisms/Modal";
 import { Input } from "../../atoms/input";
 import { Button } from "../../atoms/button";
@@ -89,7 +90,7 @@ export function BudgetPage() {
     const handleSave = () => {
         const e: typeof errors = {};
         if (!form.name.trim()) e.name = "Informe um nome.";
-        const amount = parseFloat(form.amount.replace(",", "."));
+        const amount = parseMoney(form.amount);
         if (!form.amount || isNaN(amount) || amount <= 0) e.amount = "Informe um valor válido.";
         if (form.scope !== "global" && !form.refId) e.refId = "Selecione uma opção.";
         const periodErr = validatePeriod(form.period);

@@ -1,6 +1,6 @@
 {
   "sidebar": {
-    "version": "1.1.0",
+    "version": "1.2.0",
     "groups": [
       {
         "id": "main",
@@ -75,18 +75,21 @@
             "exact": false,
             "badge": null,
             "children": [
-              {
-                "id": "support-ticket",
-                "label": "Ticket",
-                "icon": "Ticket",
-                "href": "/dashboard/support/ticket"
-              },
-              {
-                "id": "support-docs",
-                "label": "Documentação",
-                "icon": "BookOpen",
-                "href": "/dashboard/support/documentation"
-              }
+              { "id": "support-ticket", "label": "Abrir Ticket",       "icon": "Ticket",  "href": "/dashboard/support/ticket" },
+              { "id": "support-portal", "label": "Portal de Suporte",  "icon": "Inbox",   "href": "/dashboard/support/portal" }
+            ]
+          },
+          {
+            "id": "documentation",
+            "label": "Documentação",
+            "icon": "BookOpen",
+            "href": "/dashboard/support/documentation",
+            "exact": false,
+            "badge": null,
+            "children": [
+              { "id": "docs-user-guide",  "label": "Manual do Usuário",    "icon": "ScrollText",    "href": "/dashboard/support/documentation/user-guide" },
+              { "id": "docs-finance-edu", "label": "Educação Financeira",  "icon": "GraduationCap", "href": "/dashboard/support/documentation/finance-edu" },
+              { "id": "docs-technical",   "label": "Doc. Técnica",         "icon": "Terminal",      "href": "/dashboard/support/documentation/technical" }
             ]
           }
         ]

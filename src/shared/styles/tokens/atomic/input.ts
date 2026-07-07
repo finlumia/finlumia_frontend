@@ -1,31 +1,29 @@
 import { lightFoundation } from "../foundation/light";
 import { darkFoundation } from "../foundation/dark";
+import { colorblindFoundation } from "../foundation/colorblind";
+
+const createThemeInputTokens = (
+    foundation: typeof lightFoundation | typeof darkFoundation | typeof colorblindFoundation,
+) => ({
+    backgroundColor: foundation.colors.bg.surface,
+    textColor: foundation.colors.text.primary,
+    placeholderColor: foundation.colors.text.muted,
+    borderColor: foundation.colors.border.default,
+    borderColorFocus: foundation.colors.border.focus,
+    borderColorError: foundation.colors.feedback.error,
+    labelColor: foundation.colors.text.secondary,
+    helperColor: foundation.colors.text.muted,
+    errorColor: foundation.colors.feedback.error,
+    iconColor: foundation.colors.text.muted,
+} as const);
 
 export const inputTokens = {
-    light: {
-        backgroundColor: lightFoundation.colors.bg.surface,
-        textColor: lightFoundation.colors.text.primary,
-        placeholderColor: lightFoundation.colors.text.muted,
-        borderColor: lightFoundation.colors.border.default,
-        borderColorFocus: lightFoundation.colors.border.focus,
-        borderColorError: lightFoundation.colors.feedback.error,
-        labelColor: lightFoundation.colors.text.secondary,
-        helperColor: lightFoundation.colors.text.muted,
-        errorColor: lightFoundation.colors.feedback.error,
-        iconColor: lightFoundation.colors.text.muted,
-    },
+    light: createThemeInputTokens(lightFoundation),
     dark: {
+        ...createThemeInputTokens(darkFoundation),
         backgroundColor: darkFoundation.colors.bg.elevated,
-        textColor: darkFoundation.colors.text.primary,
-        placeholderColor: darkFoundation.colors.text.muted,
-        borderColor: darkFoundation.colors.border.default,
-        borderColorFocus: darkFoundation.colors.border.focus,
-        borderColorError: darkFoundation.colors.feedback.error,
-        labelColor: darkFoundation.colors.text.secondary,
-        helperColor: darkFoundation.colors.text.muted,
-        errorColor: darkFoundation.colors.feedback.error,
-        iconColor: darkFoundation.colors.text.muted,
     },
+    colorblind: createThemeInputTokens(colorblindFoundation),
     base: {
         height: { sm: "3.2rem", md: "4rem", lg: "4.8rem" },
         fontSize: { sm: "1.2rem", md: "1.4rem", lg: "1.6rem" },

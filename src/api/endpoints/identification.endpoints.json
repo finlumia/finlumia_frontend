@@ -5,8 +5,8 @@
     "description": "Autenticação, gerenciamento de sessão, perfil do usuário e KPIs do painel principal.",
     "baseUrls": {
       "local":       "http://localhost:8080/identification",
-      "homologation":"https://api-hom.finlumia.com/identification",
-      "production":  "https://api.finlumia.com/identification"
+      "homologation":"https://<seu-host-homologacao>/identification",
+      "production":  "https://apifinlumia.thiagobenevide.com.br/identification"
     }
   },
 

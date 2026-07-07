@@ -4,8 +4,13 @@ import React, { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Input } from "../atoms/input";
 import { Button } from "../atoms/button";
+import { OtpInput } from "../molecules/OtpInput";
+import { GoogleSignInButton } from "../molecules/GoogleSignInButton";
 import { getFoundationByTheme } from "../../shared/styles/tokens";
+import { getAppBackground } from "../../shared/styles/appBackground";
 import { useTheme } from "../../shared/styles/theme.context";
+import { useAuth } from "../../contexts/auth.context";
+import { authService } from "../../services/identification/auth.service";
 
 const GoogleIcon = () => (
     <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
@@ -31,16 +36,26 @@ function passwordStrength(password: string) {
     return score; // 0..4
 }
 
+type Step = "form" | "verify";
+
 export function RegisterPage() {
     const router = useRouter();
     const { theme } = useTheme();
+    const { refreshUser } = useAuth();
     const f = getFoundationByTheme(theme);
     const isDark = theme === "dark";
 
+    const [step, setStep] = useState<Step>("form");
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [accepted, setAccepted] = useState(false);
+    const [apiError, setApiError] = useState("");
+    const [isLoading, setIsLoading] = useState(false);
+
+    const [code, setCode] = useState(["", "", "", "", "", ""]);
+    const [codeError, setCodeError] = useState("");
+    const [resendMessage, setResendMessage] = useState("");
 
     const [errors, setErrors] = useState<{ name?: string; email?: string; password?: string; accepted?: string }>({});
 
@@ -56,10 +71,67 @@ export function RegisterPage() {
         return Object.keys(next).length === 0;
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (validate()) {
+        if (!validate()) return;
+
+        setApiError("");
+        setIsLoading(true);
+        try {
+            await authService.register({ name: name.trim(), email, password });
+            setStep("verify");
+        } catch (err: unknown) {
+            const msg = (err as { message?: string })?.message ?? "Erro ao criar conta. Tente novamente.";
+            setApiError(msg);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleVerifyCode = async () => {
+        const otp = code.join("");
+        if (otp.length < 6) {
+            setCodeError("Digite o código completo de 6 dígitos.");
+            return;
+        }
+        setCodeError("");
+        setApiError("");
+        setIsLoading(true);
+        try {
+            await authService.verifyEmail({ email, code: otp });
+            router.push("/login?verified=1");
+        } catch (err: unknown) {
+            const msg = (err as { message?: string })?.message ?? "Código inválido ou expirado.";
+            setApiError(msg);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleResendCode = async () => {
+        setResendMessage("");
+        setApiError("");
+        try {
+            await authService.resendVerificationCode({ email });
+            setResendMessage("Reenviamos o código para o seu e-mail.");
+        } catch (err: unknown) {
+            const msg = (err as { message?: string })?.message ?? "Não foi possível reenviar o código.";
+            setApiError(msg);
+        }
+    };
+
+    const handleGoogleCredential = async (idToken: string) => {
+        setApiError("");
+        setIsLoading(true);
+        try {
+            await authService.loginWithGoogle(idToken);
+            await refreshUser();
             router.push("/dashboard");
+        } catch (err: unknown) {
+            const msg = (err as { message?: string })?.message ?? "Não foi possível continuar com o Google.";
+            setApiError(msg);
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -86,7 +158,7 @@ export function RegisterPage() {
     return (
         <div style={{
             minHeight: "100vh",
-            backgroundColor: f.colors.bg.app,
+            ...getAppBackground(theme),
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -113,6 +185,23 @@ export function RegisterPage() {
                     padding: "3.2rem",
                     boxShadow: isDark ? "none" : "0 4px 24px rgba(0,0,0,0.08)",
                 }}>
+                    {/* Erro de API */}
+                    {apiError && (
+                        <div style={{
+                            backgroundColor: isDark ? f.colors.feedback.errorBg : "#FEF2F2",
+                            border: `1px solid ${f.colors.feedback.error}`,
+                            borderRadius: "0.8rem",
+                            padding: "1.2rem 1.6rem",
+                            marginBottom: "1.6rem",
+                            fontSize: "1.3rem",
+                            color: f.colors.feedback.error,
+                        }}>
+                            {apiError}
+                        </div>
+                    )}
+
+                    {step === "form" && (
+                    <>
                     <h1 style={{ fontSize: "2rem", fontWeight: 700, color: f.colors.text.primary, marginBottom: "0.4rem" }}>
                         Criar conta grátis
                     </h1>
@@ -121,31 +210,32 @@ export function RegisterPage() {
                     </p>
 
                     {/* Google Sign-Up */}
-                    <button
-                        type="button"
-                        onClick={() => console.log("Google OAuth")}
-                        style={{
-                            width: "100%",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            gap: "0.8rem",
-                            height: "4.4rem",
-                            borderRadius: "0.8rem",
-                            border: `1px solid ${borderColor}`,
-                            backgroundColor: "transparent",
-                            color: f.colors.text.primary,
-                            fontSize: "1.4rem",
-                            fontWeight: 600,
-                            cursor: "pointer",
-                            fontFamily: "inherit",
-                            transition: "background-color 0.15s ease",
-                            marginBottom: "2rem",
-                        }}
-                    >
-                        <GoogleIcon />
-                        Cadastrar com Google
-                    </button>
+                    <GoogleSignInButton onCredential={handleGoogleCredential} onError={setApiError} disabled={isLoading}>
+                        <button
+                            type="button"
+                            style={{
+                                width: "100%",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: "0.8rem",
+                                height: "4.4rem",
+                                borderRadius: "0.8rem",
+                                border: `1px solid ${borderColor}`,
+                                backgroundColor: "transparent",
+                                color: f.colors.text.primary,
+                                fontSize: "1.4rem",
+                                fontWeight: 600,
+                                cursor: "pointer",
+                                fontFamily: "inherit",
+                                transition: "background-color 0.15s ease",
+                            }}
+                        >
+                            <GoogleIcon />
+                            Cadastrar com Google
+                        </button>
+                    </GoogleSignInButton>
+                    <div style={{ marginBottom: "2rem" }} />
 
                     {/* Divider */}
                     <div style={{ display: "flex", alignItems: "center", gap: "1.2rem", marginBottom: "2rem" }}>
@@ -241,7 +331,7 @@ export function RegisterPage() {
                         )}
 
                         <Button
-                            label="Criar minha conta"
+                            label={isLoading ? "Criando conta..." : "Criar minha conta"}
                             type="submit"
                             theme={theme}
                             variant="primary"
@@ -256,6 +346,7 @@ export function RegisterPage() {
                                 height: "4.4rem",
                                 fontSize: "1.5rem",
                                 fontWeight: "700",
+                                opacity: isLoading ? "0.7" : "1",
                             }}
                         />
                     </form>
@@ -289,6 +380,79 @@ export function RegisterPage() {
                             Entrar
                         </button>
                     </p>
+                    </>
+                    )}
+
+                    {step === "verify" && (
+                        <>
+                            <div style={{
+                                width: "5.6rem", height: "5.6rem", borderRadius: "1.2rem",
+                                backgroundColor: isDark ? f.colors.feedback.infoBg : "#E0EEF9",
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                                marginBottom: "2rem",
+                            }}>
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={primaryColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+                                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                                </svg>
+                            </div>
+
+                            <h1 style={{ fontSize: "2rem", fontWeight: 700, color: f.colors.text.primary, marginBottom: "0.6rem" }}>
+                                Confirme seu e-mail
+                            </h1>
+                            <p style={{ fontSize: "1.4rem", color: mutedColor, marginBottom: "2.8rem", lineHeight: 1.6 }}>
+                                Enviamos um código de 6 dígitos para <strong>{email}</strong>. Digite abaixo para ativar sua conta.
+                            </p>
+
+                            <OtpInput value={code} onChange={setCode} theme={theme} error={codeError} />
+
+                            <Button
+                                label={isLoading ? "Verificando..." : "Verificar código"}
+                                type="button"
+                                theme={theme}
+                                variant="primary"
+                                size="lg"
+                                onClick={handleVerifyCode}
+                                styleConfig={{
+                                    width: "100%",
+                                    backgroudColor: primaryColor,
+                                    textColor: "#FFFFFF",
+                                    border: "none",
+                                    borderRadius: "0.8rem",
+                                    height: "4.4rem",
+                                    fontSize: "1.5rem",
+                                    fontWeight: "600",
+                                    display: "flex",
+                                    opacity: isLoading ? "0.7" : "1",
+                                }}
+                            />
+
+                            <p style={{ textAlign: "center", marginTop: "2rem", fontSize: "1.3rem", color: mutedColor }}>
+                                Não recebeu o código?{" "}
+                                <button
+                                    type="button"
+                                    onClick={handleResendCode}
+                                    style={{
+                                        background: "none",
+                                        border: "none",
+                                        color: primaryColor,
+                                        fontWeight: 600,
+                                        cursor: "pointer",
+                                        padding: 0,
+                                        fontFamily: "inherit",
+                                        fontSize: "1.3rem",
+                                    }}
+                                >
+                                    Reenviar código
+                                </button>
+                            </p>
+                            {resendMessage && (
+                                <p style={{ textAlign: "center", fontSize: "1.2rem", color: f.colors.feedback.success }}>
+                                    {resendMessage}
+                                </p>
+                            )}
+                        </>
+                    )}
                 </div>
 
                 <p style={{ textAlign: "center", marginTop: "2rem", fontSize: "1.1rem", color: mutedColor }}>

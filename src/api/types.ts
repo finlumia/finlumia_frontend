@@ -87,6 +87,12 @@ export type ResetPasswordRequest  = {
   confirmPassword: string;
 };
 
+export type RegisterRequest  = { name: string; email: string; password: string };
+export type RegisterResponse = { message: string };
+
+export type VerifyEmailRequest        = { email: string; code: string };
+export type ResendVerificationRequest = { email: string };
+
 export type UpdateProfileRequest  = { name?: string; locale?: string; theme?: "light" | "dark" };
 export type ChangePasswordRequest = { currentPassword: string; newPassword: string; confirmPassword: string };
 
@@ -252,6 +258,52 @@ export type Insight = {
   generatedAt:      string;
 };
 
+// Todos os endpoints de /reports (exceto /kpis, que já é um objeto plano)
+// respondem envelopados em { data: [...], ...metadados } — nunca um array puro.
+export type CashFlowResponse = {
+  data: MonthlySummary[];
+  kpis: KpiSummary;
+};
+
+export type CategoryBreakdownResponse = {
+  data:  CategoryBreakdown[];
+  total: number;
+};
+
+export type InstitutionBreakdownResponse = {
+  data:  InstitutionBreakdown[];
+  total: number;
+};
+
+export type NetWorthDataPoint = {
+  month:      string;
+  year:       number;
+  patrimonio: number;
+};
+
+export type NetWorthResponse = {
+  data:    NetWorthDataPoint[];
+  current: number;
+  initial: number;
+  growth:  number;
+};
+
+export type MonthlyComparisonItem = {
+  label:    string;
+  receitas: number;
+  despesas: number;
+  saldo:    number;
+};
+
+export type MonthlyComparisonResponse = {
+  data: MonthlyComparisonItem[];
+};
+
+export type InsightsResponse = {
+  data:        Insight[];
+  generatedAt: string;
+};
+
 // ── configurator — Tabelas ─────────────────────────────────────────────────
 
 export type CfgTable = {
@@ -413,3 +465,98 @@ export type CfgTrigger = {
 };
 
 export type CfgTriggerCreateRequest = Omit<CfgTrigger, "id" | "createdAt" | "table">;
+
+// ── support — Helpdesk ─────────────────────────────────────────────────────
+
+export type TicketCategory = "duvida" | "bug" | "melhoria" | "acesso" | "outros";
+export type TicketPriority = "baixa" | "media" | "alta" | "urgente";
+export type TicketStatus   = "aberto" | "em_analise" | "respondido" | "fechado";
+export type AuthorRole     = "user" | "admin" | "gerente" | "suporte";
+
+export type TicketUser = {
+  id:    string;
+  name:  string;
+  email: string;
+};
+
+export type TicketAuthor = {
+  id:   string;
+  name: string;
+  role: AuthorRole;
+};
+
+export type TicketListItem = {
+  id:             string;
+  ticket_code:    string;
+  user:           TicketUser;
+  title:          string;
+  category:       TicketCategory;
+  priority:       TicketPriority;
+  status:         TicketStatus;
+  description:    string;
+  assigned_to:    string | null;
+  response_count: number;
+  created_at:     string;
+  updated_at:     string;
+};
+
+export type TicketResponse = {
+  id:          string;
+  author:      TicketAuthor;
+  message:     string;
+  is_internal: boolean;
+  created_at:  string;
+};
+
+export type TicketAttachment = {
+  id:              string;
+  file_name:       string;
+  file_size_bytes: number;
+  mime_type:       string;
+  url:             string;
+  created_at:      string;
+};
+
+export type TicketDetail = Omit<TicketListItem, "response_count"> & {
+  responses:   TicketResponse[];
+  attachments: TicketAttachment[];
+};
+
+export type TicketStats = {
+  by_status:            Record<TicketStatus, number>;
+  by_category:          Record<TicketCategory, number>;
+  by_priority:          Record<TicketPriority, number>;
+  total:                number;
+  avg_resolution_hours: number | null;
+};
+
+export type SupportPageMeta = {
+  page:        number;
+  limit:       number;
+  total:       number;
+  total_pages: number;
+};
+
+export type SupportPaginatedResponse<T> = {
+  data: T[];
+  meta: SupportPageMeta;
+};
+
+export type CreateTicketBody = {
+  title:       string;
+  category:    TicketCategory;
+  priority?:   TicketPriority;
+  description: string;
+};
+
+export type PatchTicketBody = {
+  status?:      TicketStatus;
+  priority?:    TicketPriority;
+  assigned_to?: string | null;
+};
+
+export type CreateResponseBody = {
+  message:      string;
+  is_internal?: boolean;
+  new_status?:  TicketStatus;
+};

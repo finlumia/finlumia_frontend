@@ -120,6 +120,11 @@ function Remove-FinlumiaContainer {
     }
 }
 
+function Remove-NodeModulesVolume {
+    param([string]$VolumeName)
+    docker volume rm $VolumeName 2>$null | Out-Null
+}
+
 function Test-ContainerRunning {
     # docker ps nao falha quando o container ainda nao existe (diferente de docker inspect)
     $id = docker ps -q -f "name=$Name" -f "status=running" 2>$null | Select-Object -First 1
@@ -127,19 +132,32 @@ function Test-ContainerRunning {
 }
 
 function Start-FinlumiaUp {
+    param([string]$NodeModulesVolume)
+
     $runArgs = @(
         "run",
         "-d",
         "--name", $Name,
+        "--add-host", "host.docker.internal:host-gateway",
         "-p", "${Port}:3000",
         "-v", "${Root}:${AppMount}",
+        # Volume nomeado sobreposto ao node_modules: evita que o bind mount do
+        # Windows (lento para milhares de arquivos pequenos) seja usado para as
+        # dependências. Na primeira execução o Docker semeia o volume com o
+        # node_modules já instalado na imagem (ver Dockerfile).
+        "-v", "${NodeModulesVolume}:${AppMount}/node_modules",
         "-w", $AppMount,
         "-e", "NODE_ENV=development",
         "-e", "NEXT_TELEMETRY_DISABLED=1",
         "-e", "NPM_CONFIG_CACHE=/home/finlumia/.npm",
+        "-e", "SERVICE_IDENTIFICATION_URL=http://host.docker.internal:28083",
+        "-e", "SERVICE_MOVIMENTATION_URL=http://host.docker.internal:28084",
+        "-e", "SERVICE_DOCUMENT_URL=http://host.docker.internal:28085",
+        "-e", "SERVICE_CONFIGURATOR_URL=http://host.docker.internal:28081",
+        "-e", "SERVICE_SUPPORT_URL=http://host.docker.internal:28082",
         $Image,
         "bash", "-lc",
-        "npm install && npm run dev -- --hostname 0.0.0.0 --port 3000"
+        "npm run dev -- --hostname 0.0.0.0 --port 3000"
     )
 
     Write-Host "Subindo container '$Name'..." -ForegroundColor Cyan
@@ -194,9 +212,14 @@ if ($up) {
         throw "Dockerfile nao encontrado: $Dockerfile"
     }
 
+    $NodeModulesVolume = "$Image-node-modules"
+
     $needsBuild = $Build -or -not (Test-ImageExists -ImageName $Image)
     if ($needsBuild) {
         Build-FinlumiaImage
+        # Forca o volume a ser re-semeado com o node_modules da imagem nova
+        # (o Docker so preenche automaticamente um volume nomeado vazio).
+        Remove-NodeModulesVolume -VolumeName $NodeModulesVolume
     }
 
     if (Test-ContainerRunning) {
@@ -206,5 +229,5 @@ if ($up) {
     }
 
     Remove-FinlumiaContainer
-    Start-FinlumiaUp
+    Start-FinlumiaUp -NodeModulesVolume $NodeModulesVolume
 }

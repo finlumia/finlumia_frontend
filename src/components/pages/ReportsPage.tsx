@@ -1,26 +1,24 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { LineAreaChart } from "../atoms/chart/LineAreaChart";
 import { DonutChart } from "../atoms/chart/DonutChart";
 import { BarChart } from "../atoms/chart/BarChart";
 import { HorizontalBar } from "../atoms/chart/HorizontalBar";
-import {
-    CATEGORY_DATA, INSTITUTION_DATA, INSIGHTS,
-    getDataForPeriod, computeKPIs,
-    type Period, type Insight,
-} from "../../config/reports";
+import { reportsService } from "../../services/document/document.service";
+import type {
+    MonthlySummary, KpiSummary, CategoryBreakdown, InstitutionBreakdown, Insight, NetWorthDataPoint,
+} from "../../api/types";
 import { getFoundationByTheme } from "../../shared/styles/tokens";
 import { useTheme } from "../../shared/styles/theme.context";
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
+type Period = "3m" | "6m" | "12m" | "ytd" | "custom";
+type CategoryType = "despesa" | "receita";
+
 function fmt(v: number) {
     return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-}
-
-function fmtPct(v: number, sign = true) {
-    return `${sign && v > 0 ? "+" : ""}${v.toFixed(1)}%`;
 }
 
 // ── sub-components ─────────────────────────────────────────────────────────
@@ -89,6 +87,21 @@ function ChartCard({
     );
 }
 
+function SkeletonCard({ f, isDark }: { f: Foundation; isDark: boolean }) {
+    return (
+        <div style={{
+            backgroundColor: isDark ? f.colors.bg.elevated : "#FFFFFF",
+            border: `1px solid ${f.colors.border.default}`,
+            borderRadius: "1.2rem",
+            padding: "2rem",
+            height: "12rem",
+            animation: "pulse 1.5s ease-in-out infinite",
+        }}>
+            <style>{`@keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.5 } }`}</style>
+        </div>
+    );
+}
+
 const INSIGHT_ICONS: Record<string, React.ReactNode> = {
     "trending-up": (
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -127,10 +140,25 @@ const INSIGHT_STYLE: Record<Insight["type"], { color: string; bgDark: string; bg
 };
 
 const PERIOD_OPTIONS: { id: Period; label: string }[] = [
-    { id: "3m",  label: "3 meses" },
-    { id: "6m",  label: "6 meses" },
-    { id: "12m", label: "12 meses" },
-    { id: "ytd", label: "Este ano" },
+    { id: "3m",     label: "3 meses" },
+    { id: "6m",     label: "6 meses" },
+    { id: "12m",    label: "12 meses" },
+    { id: "ytd",    label: "Este ano" },
+    { id: "custom", label: "Personalizado" },
+];
+
+// Cada aba responde a UMA pergunta do usuário final, em vez de jogar todos os
+// gráficos juntos na mesma tela — o que dificultava a leitura (feedback de
+// usabilidade). "geral" fica sempre visível como ponto de partida.
+type ReportView = "geral" | "categorias" | "comparativo" | "patrimonio" | "bancos" | "insights";
+
+const REPORT_VIEWS: { id: ReportView; label: string; question: string }[] = [
+    { id: "geral",       label: "Visão geral",        question: "Como estão minhas finanças no período?" },
+    { id: "comparativo", label: "Receita x Despesa",  question: "Estou gastando mais do que ganho?" },
+    { id: "categorias",  label: "Categorias",         question: "Em que estou gastando mais?" },
+    { id: "patrimonio",  label: "Patrimônio",         question: "Meu patrimônio está crescendo?" },
+    { id: "bancos",      label: "Bancos",             question: "Onde estão minhas movimentações?" },
+    { id: "insights",    label: "Insights",           question: "O que a Finlumia percebeu nos meus dados?" },
 ];
 
 // ── main page ───────────────────────────────────────────────────────────────
@@ -140,51 +168,87 @@ export function ReportsPage() {
     const f = getFoundationByTheme(theme);
     const isDark = theme === "dark";
     const [period, setPeriod] = useState<Period>("6m");
+    const [customStart, setCustomStart] = useState("");
+    const [customEnd, setCustomEnd] = useState("");
+    const [categoryType, setCategoryType] = useState<CategoryType>("despesa");
+    const [view, setView] = useState<ReportView>("geral");
+    const [isLoading, setIsLoading] = useState(true);
+    const [loadError, setLoadError] = useState("");
 
-    const data = useMemo(() => getDataForPeriod(period), [period]);
-    const kpi  = useMemo(() => computeKPIs(data), [data]);
+    const [kpi, setKpi] = useState<KpiSummary | null>(null);
+    const [cashFlow, setCashFlow] = useState<MonthlySummary[]>([]);
+    const [netWorth, setNetWorth] = useState<NetWorthDataPoint[]>([]);
+    const [categories, setCategories] = useState<CategoryBreakdown[]>([]);
+    const [categoriesTotal, setCategoriesTotal] = useState(0);
+    const [institutions, setInstitutions] = useState<InstitutionBreakdown[]>([]);
+    const [insights, setInsights] = useState<Insight[]>([]);
 
-    // Line chart series
-    const cashFlowSeries = useMemo(() => ([
-        { label: "Receitas",  values: data.map((d) => d.receitas),  color: f.colors.feedback.success, showArea: true },
-        { label: "Despesas",  values: data.map((d) => d.despesas),  color: f.colors.feedback.error,   showArea: true },
-        { label: "Saldo",     values: data.map((d) => d.saldo),     color: f.colors.brand.primary,    showArea: false },
-    ]), [data, f]);
+    // Filtro personalizado: só dispara a busca quando as duas datas estão
+    // preenchidas e a inicial não é depois da final (evita chamadas inválidas
+    // a cada tecla digitada no seletor de data).
+    const customRangeReady = period !== "custom" || (!!customStart && !!customEnd && customStart <= customEnd);
 
-    const patrimonioSeries = useMemo(() => ([
-        { label: "Patrimônio líquido", values: data.map((d) => d.patrimonio), color: f.colors.brand.primary, showArea: true },
-    ]), [data, f]);
+    const load = useCallback(async (p: Period, categoryFilterType: CategoryType, start: string, end: string) => {
+        setIsLoading(true);
+        setLoadError("");
+        try {
+            const q = p === "custom"
+                ? { period: p, periodStart: start, periodEnd: end }
+                : { period: p };
+            const [kpiRes, cfRes, nwRes, catRes, instRes, insRes] = await Promise.all([
+                reportsService.getKPIs(q),
+                reportsService.getCashFlow(q),
+                reportsService.getNetWorth(q),
+                reportsService.getByCategory({ ...q, type: categoryFilterType }),
+                reportsService.getByInstitution(q),
+                reportsService.getInsights(q),
+            ]);
+            setKpi(kpiRes);
+            setCashFlow(cfRes.data);
+            setNetWorth(nwRes.data);
+            setCategories(catRes.data);
+            setCategoriesTotal(catRes.total);
+            setInstitutions(instRes.data);
+            setInsights(insRes.data);
+        } catch (err: unknown) {
+            setLoadError((err as { message?: string })?.message ?? "Não foi possível carregar os relatórios.");
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
 
-    const xLabels = data.map((d) => d.month);
+    useEffect(() => {
+        if (!customRangeReady) return;
+        load(period, categoryType, customStart, customEnd);
+    }, [period, categoryType, customStart, customEnd, customRangeReady, load]);
 
-    // Bar chart: receita vs despesa por mês
-    const barGroups = useMemo(() =>
-        data.map((d) => ({ label: d.month, values: [d.receitas, d.despesas] }))
-    , [data]);
+    const xLabels = cashFlow.map((d) => d.month);
 
+    const cashFlowSeries = [
+        { label: "Receitas",  values: cashFlow.map((d) => d.receitas),  color: f.colors.feedback.success, showArea: true },
+        { label: "Despesas",  values: cashFlow.map((d) => d.despesas),  color: f.colors.feedback.error,   showArea: true },
+        { label: "Saldo",     values: cashFlow.map((d) => d.saldo),     color: f.colors.brand.primary,    showArea: false },
+    ];
+
+    const patrimonioSeries = [
+        { label: "Patrimônio líquido", values: netWorth.map((d) => d.patrimonio), color: f.colors.brand.primary, showArea: true },
+    ];
+
+    const barGroups = cashFlow.map((d) => ({ label: d.month, values: [d.receitas, d.despesas] }));
     const barSeries = [
         { label: "Receitas", color: f.colors.feedback.success },
         { label: "Despesas", color: f.colors.feedback.error },
     ];
 
-    // Donut chart: categories
-    const donutSlices = CATEGORY_DATA.map((c) => ({
-        id: c.categoryId,
-        label: c.label,
-        value: c.total,
-        percent: c.percent,
-        color: c.color,
+    const donutSlices = categories.map((c) => ({
+        id: c.categoryId, label: c.label, value: c.total, percent: c.percent, color: c.color,
     }));
 
-    // Horizontal bars: institutions
-    const hbarItems = INSTITUTION_DATA.map((inst) => ({
-        id: inst.id,
-        label: inst.label,
-        value: inst.total,
-        percent: inst.percent,
-        color: inst.color,
-        sublabel: inst.abbr,
+    const hbarItems = institutions.map((inst) => ({
+        id: inst.id, label: inst.label, value: inst.total, percent: inst.percent, color: inst.color, sublabel: inst.abbr,
     }));
+
+    const catTotal = categoriesTotal;
 
     const border = f.colors.border.default;
     const muted  = f.colors.text.muted;
@@ -209,13 +273,9 @@ export function ReportsPage() {
                                 type="button"
                                 onClick={() => setPeriod(opt.id)}
                                 style={{
-                                    padding: "0.5rem 1.2rem",
-                                    borderRadius: "0.6rem",
-                                    border: "none",
-                                    fontSize: "1.3rem",
-                                    fontWeight: period === opt.id ? 600 : 400,
-                                    cursor: "pointer",
-                                    fontFamily: "inherit",
+                                    padding: "0.5rem 1.2rem", borderRadius: "0.6rem", border: "none",
+                                    fontSize: "1.3rem", fontWeight: period === opt.id ? 600 : 400,
+                                    cursor: "pointer", fontFamily: "inherit",
                                     backgroundColor: period === opt.id ? (isDark ? f.colors.bg.surface : "#fff") : "transparent",
                                     color: period === opt.id ? f.colors.text.primary : muted,
                                     boxShadow: period === opt.id ? "0 1px 4px rgba(0,0,0,0.15)" : "none",
@@ -227,79 +287,193 @@ export function ReportsPage() {
                         ))}
                     </div>
                 </div>
+
+                {/* Filtro personalizado: aparece só quando "Personalizado" está selecionado */}
+                {period === "custom" && (
+                    <div style={{ display: "flex", alignItems: "flex-end", gap: "1rem", flexWrap: "wrap", marginTop: "1.2rem" }}>
+                        <label style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                            <span style={{ fontSize: "1.1rem", color: muted }}>De</span>
+                            <input
+                                type="date"
+                                value={customStart}
+                                max={customEnd || undefined}
+                                onChange={(e) => setCustomStart(e.target.value)}
+                                style={{
+                                    height: "3.6rem", padding: "0 1rem", borderRadius: "0.6rem",
+                                    border: `1px solid ${border}`, backgroundColor: isDark ? f.colors.bg.elevated : "#fff",
+                                    color: f.colors.text.primary, fontSize: "1.3rem", fontFamily: "inherit",
+                                }}
+                            />
+                        </label>
+                        <label style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                            <span style={{ fontSize: "1.1rem", color: muted }}>Até</span>
+                            <input
+                                type="date"
+                                value={customEnd}
+                                min={customStart || undefined}
+                                onChange={(e) => setCustomEnd(e.target.value)}
+                                style={{
+                                    height: "3.6rem", padding: "0 1rem", borderRadius: "0.6rem",
+                                    border: `1px solid ${border}`, backgroundColor: isDark ? f.colors.bg.elevated : "#fff",
+                                    color: f.colors.text.primary, fontSize: "1.3rem", fontFamily: "inherit",
+                                }}
+                            />
+                        </label>
+                        {!customRangeReady && (
+                            <span style={{ fontSize: "1.2rem", color: muted, alignSelf: "center" }}>
+                                Escolha as duas datas (inicial antes da final) para carregar o período personalizado.
+                            </span>
+                        )}
+                    </div>
+                )}
             </div>
+
+            {loadError && (
+                <div style={{
+                    marginBottom: "1.6rem", padding: "1rem 1.4rem", borderRadius: "0.8rem",
+                    backgroundColor: isDark ? f.colors.feedback.errorBg : "#FEF2F2",
+                    border: `1px solid ${f.colors.feedback.error}`,
+                    color: f.colors.feedback.error, fontSize: "1.3rem",
+                }}>
+                    {loadError}
+                </div>
+            )}
 
             {/* ── KPI cards ───────────────────────────────────────── */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(20rem, 1fr))", gap: "1.4rem", marginBottom: "2.4rem" }}>
-                <KpiCard
-                    label="Total de receitas" value={fmt(kpi.totalReceitas)}
-                    delta={fmtPct(8.4, true)} deltaPositive
-                    sub={`${data.length} meses`}
-                    accent={f.colors.feedback.success} f={f} isDark={isDark}
-                />
-                <KpiCard
-                    label="Total de despesas" value={fmt(kpi.totalDespesas)}
-                    delta={fmtPct(-3.1, true)} deltaPositive={false}
-                    sub="vs período anterior"
-                    accent={f.colors.feedback.error} f={f} isDark={isDark}
-                />
-                <KpiCard
-                    label="Saldo líquido" value={fmt(kpi.saldoLiquido)}
-                    delta="Receitas – Despesas"
-                    accent={kpi.saldoLiquido >= 0 ? f.colors.brand.primary : f.colors.feedback.error}
-                    f={f} isDark={isDark}
-                />
-                <KpiCard
-                    label="Taxa de poupança" value={`${kpi.taxaPoupanca.toFixed(1)}%`}
-                    delta="Meta: ≥ 20%" deltaPositive={kpi.taxaPoupanca >= 20}
-                    sub="do total recebido"
-                    accent={kpi.taxaPoupanca >= 20 ? f.colors.feedback.success : f.colors.feedback.warning}
-                    f={f} isDark={isDark}
-                />
-                <KpiCard
-                    label="Patrimônio atual" value={fmt(kpi.patrimonioAtual)}
-                    delta={fmtPct(kpi.crescimentoPatrimonio, true)} deltaPositive={kpi.crescimentoPatrimonio >= 0}
-                    sub="no período selecionado"
-                    accent={f.colors.brand.primary} f={f} isDark={isDark}
-                />
-            </div>
-
-            {/* ── Fluxo de caixa (line) ────────────────────────────── */}
-            <div style={{ marginBottom: "2rem" }}>
-                <ChartCard
-                    title="Fluxo de Caixa"
-                    subtitle="Receitas, despesas e saldo ao longo do período"
-                    f={f} isDark={isDark}
-                    action={
-                        <div style={{ display: "flex", gap: "1.4rem" }}>
-                            {cashFlowSeries.map((s) => (
-                                <div key={s.label} style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                                    <div style={{ width: "2rem", height: "3px", backgroundColor: s.color, borderRadius: "2px" }} />
-                                    <span style={{ fontSize: "1.1rem", color: muted }}>{s.label}</span>
-                                </div>
-                            ))}
-                        </div>
-                    }
-                >
-                    <LineAreaChart series={cashFlowSeries} labels={xLabels} theme={theme} />
-                </ChartCard>
-            </div>
-
-            {/* ── Row 2: Donut + Bar comparativo ──────────────────── */}
-            <div className="grid-responsive" style={{ ["--grid-cols"]: "1fr 1.4fr", marginBottom: "2rem" } as React.CSSProperties}>
-                <ChartCard
-                    title="Despesas por Categoria"
-                    subtitle={`Total: ${fmt(CATEGORY_DATA.reduce((s, c) => s + c.total, 0))}`}
-                    f={f} isDark={isDark}
-                >
-                    <DonutChart
-                        slices={donutSlices}
-                        centerLabel="Total gasto"
-                        centerValue={`R$${(CATEGORY_DATA.reduce((s, c) => s + c.total, 0) / 1000).toFixed(1)}k`}
-                        theme={theme}
+            {isLoading ? (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(20rem, 1fr))", gap: "1.4rem", marginBottom: "2.4rem" }}>
+                    {[...Array(5)].map((_, i) => <SkeletonCard key={i} f={f} isDark={isDark} />)}
+                </div>
+            ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(20rem, 1fr))", gap: "1.4rem", marginBottom: "2.4rem" }}>
+                    <KpiCard
+                        label="Total de receitas" value={fmt(kpi?.totalReceitas ?? 0)}
+                        sub={`${cashFlow.length} meses`}
+                        accent={f.colors.feedback.success} f={f} isDark={isDark}
                     />
-                </ChartCard>
+                    <KpiCard
+                        label="Total de despesas" value={fmt(kpi?.totalDespesas ?? 0)}
+                        sub="no período"
+                        accent={f.colors.feedback.error} f={f} isDark={isDark}
+                    />
+                    <KpiCard
+                        label="Saldo líquido" value={fmt(kpi?.saldoLiquido ?? 0)}
+                        delta="Receitas – Despesas"
+                        accent={(kpi?.saldoLiquido ?? 0) >= 0 ? f.colors.brand.primary : f.colors.feedback.error}
+                        f={f} isDark={isDark}
+                    />
+                    <KpiCard
+                        label="Taxa de poupança" value={`${(kpi?.taxaPoupanca ?? 0).toFixed(1)}%`}
+                        delta="Meta: ≥ 20%" deltaPositive={(kpi?.taxaPoupanca ?? 0) >= 20}
+                        sub="do total recebido"
+                        accent={(kpi?.taxaPoupanca ?? 0) >= 20 ? f.colors.feedback.success : f.colors.feedback.warning}
+                        f={f} isDark={isDark}
+                    />
+                    <KpiCard
+                        label="Patrimônio atual" value={fmt(kpi?.patrimonioAtual ?? 0)}
+                        delta={`${kpi?.crescimentoPatrimonio !== undefined ? (kpi.crescimentoPatrimonio >= 0 ? "+" : "") + kpi.crescimentoPatrimonio.toFixed(1) + "%" : ""}`}
+                        deltaPositive={(kpi?.crescimentoPatrimonio ?? 0) >= 0}
+                        sub="no período selecionado"
+                        accent={f.colors.brand.primary} f={f} isDark={isDark}
+                    />
+                </div>
+            )}
 
+            {/* ── Seletor de relatório: cada aba responde a uma pergunta ── */}
+            <div style={{ marginBottom: "2rem" }}>
+                <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap", marginBottom: "0.8rem" }}>
+                    {REPORT_VIEWS.map((v) => {
+                        const active = view === v.id;
+                        return (
+                            <button
+                                key={v.id}
+                                type="button"
+                                onClick={() => setView(v.id)}
+                                style={{
+                                    padding: "0.8rem 1.6rem", borderRadius: "0.8rem",
+                                    border: `1.5px solid ${active ? f.colors.brand.primary : border}`,
+                                    backgroundColor: active ? `${f.colors.brand.primary}18` : "transparent",
+                                    color: active ? f.colors.brand.primary : f.colors.text.secondary,
+                                    fontSize: "1.3rem", fontWeight: active ? 700 : 500,
+                                    cursor: "pointer", fontFamily: "inherit",
+                                    transition: "all 0.15s ease",
+                                }}
+                            >
+                                {v.label}
+                            </button>
+                        );
+                    })}
+                </div>
+                <p style={{ fontSize: "1.3rem", color: muted, fontStyle: "italic" }}>
+                    {REPORT_VIEWS.find((v) => v.id === view)?.question}
+                </p>
+            </div>
+
+            {/* ══ Visão geral: fluxo de caixa + saldo mensal ══════════ */}
+            {view === "geral" && (
+            <>
+                <div style={{ marginBottom: "2rem" }}>
+                    <ChartCard
+                        title="Fluxo de Caixa"
+                        subtitle="Receitas, despesas e saldo ao longo do período"
+                        f={f} isDark={isDark}
+                        action={
+                            <div style={{ display: "flex", gap: "1.4rem" }}>
+                                {cashFlowSeries.map((s) => (
+                                    <div key={s.label} style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                                        <div style={{ width: "2rem", height: "3px", backgroundColor: s.color, borderRadius: "2px" }} />
+                                        <span style={{ fontSize: "1.1rem", color: muted }}>{s.label}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        }
+                    >
+                        {cashFlow.length > 0
+                            ? <LineAreaChart series={cashFlowSeries} labels={xLabels} theme={theme} />
+                            : <div style={{ height: "20rem", display: "flex", alignItems: "center", justifyContent: "center", color: muted, fontSize: "1.3rem" }}>Sem dados para o período selecionado</div>
+                        }
+                    </ChartCard>
+                </div>
+
+                {cashFlow.length > 0 && (
+                    <ChartCard
+                        title="Resumo de Saldo por Mês"
+                        subtitle="Quanto sobrou após todas as despesas — por mês"
+                        f={f} isDark={isDark}
+                    >
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(10rem, 1fr))", gap: "1rem" }}>
+                            {cashFlow.map((d) => {
+                                const isPositive = d.saldo >= 0;
+                                const maxAbs = Math.max(...cashFlow.map((x) => Math.abs(x.saldo)), 1);
+                                const barHeight = (Math.abs(d.saldo) / maxAbs) * 100;
+
+                                return (
+                                    <div key={`${d.month}-${d.year}`} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.6rem" }}>
+                                        <div style={{ height: "6rem", display: "flex", alignItems: "flex-end" }}>
+                                            <div style={{
+                                                width: "2.8rem",
+                                                height: `${Math.min(barHeight, 100)}%`,
+                                                minHeight: "0.4rem",
+                                                borderRadius: "0.4rem",
+                                                backgroundColor: isPositive ? f.colors.feedback.success : f.colors.feedback.error,
+                                                opacity: 0.85,
+                                            }} />
+                                        </div>
+                                        <span style={{ fontSize: "1.3rem", fontWeight: 700, color: isPositive ? f.colors.feedback.success : f.colors.feedback.error }}>
+                                            {fmt(d.saldo)}
+                                        </span>
+                                        <span style={{ fontSize: "1.1rem", color: muted }}>{d.month}/{String(d.year).slice(2)}</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </ChartCard>
+                )}
+            </>
+            )}
+
+            {/* ══ Receita x Despesa: comparativo mensal ═══════════════ */}
+            {view === "comparativo" && (
                 <ChartCard
                     title="Receitas vs Despesas"
                     subtitle="Comparativo mensal do período"
@@ -315,154 +489,172 @@ export function ReportsPage() {
                         </div>
                     }
                 >
-                    <BarChart groups={barGroups} series={barSeries} theme={theme} />
+                    {barGroups.length > 0
+                        ? <BarChart groups={barGroups} series={barSeries} theme={theme} />
+                        : <div style={{ height: "20rem", display: "flex", alignItems: "center", justifyContent: "center", color: muted, fontSize: "1.3rem" }}>Sem dados</div>
+                    }
                 </ChartCard>
-            </div>
+            )}
 
-            {/* ── Row 3: Patrimônio + Instituições ────────────────── */}
-            <div className="grid-responsive" style={{ ["--grid-cols"]: "1.5fr 1fr", marginBottom: "2rem" } as React.CSSProperties}>
+            {/* ══ Categorias: donut + ranking detalhado ═══════════════ */}
+            {view === "categorias" && (
+            <>
+                {/* Filtro: ver categorias de despesa ou de receita */}
+                <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1.2rem" }}>
+                    {(["despesa", "receita"] as CategoryType[]).map((t) => {
+                        const active = categoryType === t;
+                        return (
+                            <button
+                                key={t}
+                                type="button"
+                                onClick={() => setCategoryType(t)}
+                                style={{
+                                    padding: "0.6rem 1.4rem", borderRadius: "999px",
+                                    border: `1.5px solid ${active ? f.colors.brand.primary : border}`,
+                                    backgroundColor: active ? `${f.colors.brand.primary}18` : "transparent",
+                                    color: active ? f.colors.brand.primary : muted,
+                                    fontSize: "1.2rem", fontWeight: active ? 700 : 500,
+                                    cursor: "pointer", fontFamily: "inherit",
+                                }}
+                            >
+                                {t === "despesa" ? "Despesas" : "Receitas"}
+                            </button>
+                        );
+                    })}
+                </div>
+            <div className="grid-responsive" style={{ ["--grid-cols"]: "1fr 1.4fr", marginBottom: "2rem" } as React.CSSProperties}>
                 <ChartCard
-                    title="Evolução do Patrimônio"
-                    subtitle="Saldo acumulado ao longo do período"
+                    title={categoryType === "despesa" ? "Despesas por Categoria" : "Receitas por Categoria"}
+                    subtitle={catTotal > 0 ? `Total: ${fmt(catTotal)}` : undefined}
                     f={f} isDark={isDark}
                 >
-                    <LineAreaChart series={patrimonioSeries} labels={xLabels} theme={theme} />
+                    {donutSlices.length > 0
+                        ? <DonutChart
+                            slices={donutSlices}
+                            centerLabel={categoryType === "despesa" ? "Total gasto" : "Total recebido"}
+                            centerValue={`R$${(catTotal / 1000).toFixed(1)}k`}
+                            theme={theme}
+                          />
+                        : <div style={{ height: "20rem", display: "flex", alignItems: "center", justifyContent: "center", color: muted, fontSize: "1.3rem" }}>Sem dados</div>
+                    }
                 </ChartCard>
 
-                <ChartCard
-                    title="Por Instituição Financeira"
-                    subtitle="Distribuição de gastos por banco"
-                    f={f} isDark={isDark}
-                >
-                    <HorizontalBar items={hbarItems} theme={theme} />
-                </ChartCard>
-            </div>
-
-            {/* ── Row 4: Categorias detalhadas + Insights ─────────── */}
-            <div className="grid-responsive" style={{ ["--grid-cols"]: "1fr 1fr", marginBottom: "2rem" } as React.CSSProperties}>
-                {/* Category breakdown table */}
                 <ChartCard
                     title="Ranking de Categorias"
                     subtitle="Evolução vs período anterior"
                     f={f} isDark={isDark}
                 >
-                    <div style={{ display: "flex", flexDirection: "column", gap: "0" }}>
-                        {/* Header */}
-                        <div style={{
-                            display: "grid", gridTemplateColumns: "1fr auto auto auto",
-                            gap: "0.8rem", padding: "0.4rem 0 0.8rem",
-                            borderBottom: `1px solid ${border}`,
-                            marginBottom: "0.4rem",
-                        }}>
-                            {["Categoria", "Total", "Share", "Tendência"].map((h) => (
-                                <span key={h} style={{ fontSize: "1.1rem", fontWeight: 600, color: muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                                    {h}
-                                </span>
+                    {categories.length === 0 ? (
+                        <div style={{ padding: "3rem 0", textAlign: "center", color: muted, fontSize: "1.3rem" }}>Sem dados de categorias</div>
+                    ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0" }}>
+                            <div style={{
+                                display: "grid", gridTemplateColumns: "1fr auto auto auto",
+                                gap: "0.8rem", padding: "0.4rem 0 0.8rem",
+                                borderBottom: `1px solid ${border}`, marginBottom: "0.4rem",
+                            }}>
+                                {["Categoria", "Total", "Share", "Tendência"].map((h) => (
+                                    <span key={h} style={{ fontSize: "1.1rem", fontWeight: 600, color: muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>{h}</span>
+                                ))}
+                            </div>
+                            {categories.map((cat, idx) => (
+                                <div key={cat.categoryId} style={{
+                                    display: "grid", gridTemplateColumns: "1fr auto auto auto",
+                                    gap: "0.8rem", padding: "0.9rem 0",
+                                    borderBottom: idx < categories.length - 1 ? `1px solid ${border}` : "none",
+                                    alignItems: "center",
+                                }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: "0.7rem" }}>
+                                        <div style={{ width: "0.7rem", height: "0.7rem", borderRadius: "50%", backgroundColor: cat.color, flexShrink: 0 }} />
+                                        <span style={{ fontSize: "1.3rem", color: f.colors.text.secondary }}>{cat.label}</span>
+                                    </div>
+                                    <span style={{ fontSize: "1.3rem", fontWeight: 600, color: f.colors.text.primary }}>{fmt(cat.total)}</span>
+                                    <span style={{ fontSize: "1.2rem", color: muted }}>{cat.percent.toFixed(1)}%</span>
+                                    <span style={{
+                                        fontSize: "1.2rem", fontWeight: 600,
+                                        // Para despesas, subir é ruim (vermelho); para receitas, subir é bom (verde).
+                                        color: cat.trend === 0 ? muted
+                                            : (cat.trend > 0) === (categoryType === "receita")
+                                                ? f.colors.feedback.success
+                                                : f.colors.feedback.error,
+                                    }}>
+                                        {cat.trend === 0 ? "—" : `${cat.trend > 0 ? "▲" : "▼"} ${Math.abs(cat.trend).toFixed(1)}%`}
+                                    </span>
+                                </div>
                             ))}
                         </div>
-                        {CATEGORY_DATA.map((cat, idx) => (
-                            <div key={cat.categoryId} style={{
-                                display: "grid", gridTemplateColumns: "1fr auto auto auto",
-                                gap: "0.8rem", padding: "0.9rem 0",
-                                borderBottom: idx < CATEGORY_DATA.length - 1 ? `1px solid ${border}` : "none",
-                                alignItems: "center",
-                            }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: "0.7rem" }}>
-                                    <div style={{ width: "0.7rem", height: "0.7rem", borderRadius: "50%", backgroundColor: cat.color, flexShrink: 0 }} />
-                                    <span style={{ fontSize: "1.3rem", color: f.colors.text.secondary }}>{cat.label}</span>
-                                </div>
-                                <span style={{ fontSize: "1.3rem", fontWeight: 600, color: f.colors.text.primary }}>
-                                    {fmt(cat.total)}
-                                </span>
-                                <span style={{ fontSize: "1.2rem", color: muted }}>
-                                    {cat.percent.toFixed(1)}%
-                                </span>
-                                <span style={{
-                                    fontSize: "1.2rem", fontWeight: 600,
-                                    color: cat.trend > 0 ? f.colors.feedback.error : cat.trend < 0 ? f.colors.feedback.success : muted,
-                                }}>
-                                    {cat.trend === 0 ? "—" : `${cat.trend > 0 ? "▲" : "▼"} ${Math.abs(cat.trend).toFixed(1)}%`}
-                                </span>
-                            </div>
-                        ))}
-                    </div>
+                    )}
                 </ChartCard>
+            </div>
+            </>
+            )}
 
-                {/* Insights */}
+            {/* ══ Patrimônio: evolução acumulada ═══════════════════════ */}
+            {view === "patrimonio" && (
+                <ChartCard
+                    title="Evolução do Patrimônio"
+                    subtitle="Saldo acumulado ao longo do período"
+                    f={f} isDark={isDark}
+                >
+                    {netWorth.length > 0
+                        ? <LineAreaChart series={patrimonioSeries} labels={netWorth.map((d) => d.month)} theme={theme} />
+                        : <div style={{ height: "20rem", display: "flex", alignItems: "center", justifyContent: "center", color: muted, fontSize: "1.3rem" }}>Sem dados</div>
+                    }
+                </ChartCard>
+            )}
+
+            {/* ══ Bancos: distribuição por instituição ═════════════════ */}
+            {view === "bancos" && (
+                <ChartCard
+                    title="Por Instituição Financeira"
+                    subtitle="Distribuição de gastos por banco"
+                    f={f} isDark={isDark}
+                >
+                    {hbarItems.length > 0
+                        ? <HorizontalBar items={hbarItems} theme={theme} />
+                        : <div style={{ height: "20rem", display: "flex", alignItems: "center", justifyContent: "center", color: muted, fontSize: "1.3rem" }}>Sem dados</div>
+                    }
+                </ChartCard>
+            )}
+
+            {/* ══ Insights automáticos ══════════════════════════════════ */}
+            {view === "insights" && (
                 <ChartCard
                     title="Insights Automáticos"
                     subtitle="Análises geradas a partir dos seus dados"
                     f={f} isDark={isDark}
                 >
-                    <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                        {INSIGHTS.map((ins) => {
-                            const style = INSIGHT_STYLE[ins.type];
-                            return (
-                                <div key={ins.id} style={{
-                                    display: "flex", gap: "1rem",
-                                    padding: "1.2rem",
-                                    borderRadius: "0.8rem",
-                                    backgroundColor: isDark ? style.bgDark : style.bgLight,
-                                    border: `1px solid ${style.color}30`,
-                                }}>
-                                    <div style={{
-                                        width: "3.2rem", height: "3.2rem",
-                                        borderRadius: "0.6rem",
-                                        backgroundColor: `${style.color}20`,
-                                        color: style.color,
-                                        display: "flex", alignItems: "center", justifyContent: "center",
-                                        flexShrink: 0,
+                    {insights.length === 0 ? (
+                        <div style={{ padding: "3rem 0", textAlign: "center", color: muted, fontSize: "1.3rem" }}>Nenhum insight disponível</div>
+                    ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                            {insights.map((ins) => {
+                                const style = INSIGHT_STYLE[ins.type];
+                                return (
+                                    <div key={ins.id} style={{
+                                        display: "flex", gap: "1rem", padding: "1.2rem",
+                                        borderRadius: "0.8rem",
+                                        backgroundColor: isDark ? style.bgDark : style.bgLight,
+                                        border: `1px solid ${style.color}30`,
                                     }}>
-                                        {INSIGHT_ICONS[ins.icon]}
+                                        <div style={{
+                                            width: "3.2rem", height: "3.2rem", borderRadius: "0.6rem",
+                                            backgroundColor: `${style.color}20`, color: style.color,
+                                            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                                        }}>
+                                            {INSIGHT_ICONS[ins.icon]}
+                                        </div>
+                                        <div>
+                                            <p style={{ fontSize: "1.3rem", fontWeight: 600, color: f.colors.text.primary, marginBottom: "0.2rem" }}>{ins.title}</p>
+                                            <p style={{ fontSize: "1.2rem", color: muted, lineHeight: 1.5 }}>{ins.description}</p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <p style={{ fontSize: "1.3rem", fontWeight: 600, color: f.colors.text.primary, marginBottom: "0.2rem" }}>
-                                            {ins.title}
-                                        </p>
-                                        <p style={{ fontSize: "1.2rem", color: muted, lineHeight: 1.5 }}>
-                                            {ins.description}
-                                        </p>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
                 </ChartCard>
-            </div>
-
-            {/* ── Saldo mensal sparkline summary ──────────────────── */}
-            <ChartCard
-                title="Resumo de Saldo por Mês"
-                subtitle="Quanto sobrou após todas as despesas — por mês"
-                f={f} isDark={isDark}
-            >
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(10rem, 1fr))", gap: "1rem" }}>
-                    {data.map((d) => {
-                        const isPositive = d.saldo >= 0;
-                        const barHeight = Math.abs(d.saldo / 5000) * 100;
-
-                        return (
-                            <div key={`${d.month}-${d.year}`} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.6rem" }}>
-                                {/* Mini bar */}
-                                <div style={{ height: "6rem", display: "flex", alignItems: "flex-end" }}>
-                                    <div style={{
-                                        width: "2.8rem",
-                                        height: `${Math.min(barHeight, 100)}%`,
-                                        minHeight: "0.4rem",
-                                        borderRadius: "0.4rem",
-                                        backgroundColor: isPositive ? f.colors.feedback.success : f.colors.feedback.error,
-                                        opacity: 0.85,
-                                    }} />
-                                </div>
-                                <span style={{ fontSize: "1.3rem", fontWeight: 700, color: isPositive ? f.colors.feedback.success : f.colors.feedback.error }}>
-                                    {fmt(d.saldo)}
-                                </span>
-                                <span style={{ fontSize: "1.1rem", color: muted }}>{d.month}/{d.year.toString().slice(2)}</span>
-                            </div>
-                        );
-                    })}
-                </div>
-            </ChartCard>
+            )}
         </div>
     );
 }

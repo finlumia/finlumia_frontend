@@ -5,8 +5,8 @@
     "description": "Relatórios analíticos, insights automáticos e exportação de dados (PDF, CSV, Excel).",
     "baseUrls": {
       "local":       "http://localhost:8080/document",
-      "homologation":"https://api-hom.finlumia.com/document",
-      "production":  "https://api.finlumia.com/document"
+      "homologation":"https://<seu-host-homologacao>/document",
+      "production":  "https://apifinlumia.thiagobenevide.com.br/document"
     }
   },
 

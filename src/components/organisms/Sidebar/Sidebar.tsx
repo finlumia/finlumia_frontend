@@ -5,7 +5,16 @@ import { usePathname, useRouter } from "next/navigation";
 import styles from "./Sidebar.module.css";
 import { getFoundationByTheme } from "../../../shared/styles/tokens";
 import type { ThemeMode } from "../../../shared/styles/theme.types";
+import { useTheme } from "../../../shared/styles/theme.context";
 import navigationConfig from "../../../config/navigation.json";
+import { useTour } from "../../../contexts/tour.context";
+import { useAuth } from "../../../contexts/auth.context";
+
+// Itens visíveis somente para administradores — o Configurador manipula
+// estrutura de banco, usuários e permissões, então fica oculto do menu (e
+// bloqueado por rota, ver src/app/dashboard/configurator/layout.tsx) para
+// quem não é admin.
+const ADMIN_ONLY_NAV_IDS = new Set(["configurator"]);
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -30,6 +39,14 @@ type NavGroup = {
     id: string;
     label: string | null;
     items: NavItem[];
+};
+
+// ── Theme helpers ──────────────────────────────────────────────────────────
+
+const THEME_META: Record<ThemeMode, { label: string; next: string }> = {
+    light:      { label: "Modo claro",       next: "Modo escuro" },
+    dark:       { label: "Modo escuro",      next: "Daltonismo" },
+    colorblind: { label: "Daltonismo (CUD)", next: "Modo claro" },
 };
 
 // ── Icon registry ──────────────────────────────────────────────────────────
@@ -107,7 +124,6 @@ const ICONS: Record<string, React.ReactNode> = {
             <line x1="4.93" y1="19.07" x2="9.17" y2="14.83"/>
         </svg>
     ),
-    // Configurador children
     Table2: (
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/>
@@ -148,7 +164,31 @@ const ICONS: Record<string, React.ReactNode> = {
             <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>
         </svg>
     ),
-    // UI controls
+    Inbox: (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/>
+            <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>
+        </svg>
+    ),
+    GraduationCap: (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
+            <path d="M6 12v5c3 3 9 3 12 0v-5"/>
+        </svg>
+    ),
+    ScrollText: (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M8 21h12a2 2 0 0 0 2-2v-2H10v2a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v3h4"/>
+            <path d="M19 3H9a2 2 0 0 0-2 2v12h14V5a2 2 0 0 0-2-2z"/>
+            <path d="M11 7h6"/><path d="M11 11h6"/><path d="M11 15h3"/>
+        </svg>
+    ),
+    Terminal: (
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="4 17 10 11 4 5"/>
+            <line x1="12" y1="19" x2="20" y2="19"/>
+        </svg>
+    ),
     ChevronLeft: (
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="m15 18-6-6 6-6"/>
@@ -181,38 +221,76 @@ const ICONS: Record<string, React.ReactNode> = {
             <path d="M18 6 6 18M6 6l12 12"/>
         </svg>
     ),
+    // ── Theme icons ──────────────────────────────────────────────────────────
+    Sun: (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="4"/>
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+        </svg>
+    ),
+    Moon: (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+        </svg>
+    ),
+    Eye: (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
+            <circle cx="12" cy="12" r="3"/>
+            <path d="m2 2 20 20" strokeWidth="2.5"/>
+        </svg>
+    ),
 };
+
+// ── Theme icon per mode ────────────────────────────────────────────────────
+
+function ThemeIcon({ theme }: { theme: ThemeMode }) {
+    if (theme === "dark") return <>{ICONS.Moon}</>;
+    if (theme === "colorblind") return <>{ICONS.Eye}</>;
+    return <>{ICONS.Sun}</>;
+}
 
 // ── Component ──────────────────────────────────────────────────────────────
 
 type SidebarProps = {
     theme?: ThemeMode;
     user?: { name: string; email: string };
-    /** Desktop collapsed (icon-rail) state. */
     collapsed?: boolean;
     onToggleCollapse?: () => void;
-    /** Mobile/tablet off-canvas drawer open state. */
     mobileOpen?: boolean;
     onCloseMobile?: () => void;
+    onLogout?: () => void | Promise<void>;
 };
 
 export function Sidebar({
-    theme = "light",
+    theme: themeProp = "light",
     user,
     collapsed = false,
     onToggleCollapse,
     mobileOpen = false,
     onCloseMobile,
+    onLogout,
 }: SidebarProps) {
     const [openGroups, setOpenGroups] = useState<Set<string>>(new Set(["configurator"]));
+    const { startTour } = useTour();
+    const { theme: contextTheme, toggleTheme } = useTheme();
+    const { user: authUser } = useAuth();
+    const isAdmin = authUser?.role === "admin";
 
-    // On the mobile/tablet drawer the sidebar is always shown expanded (full width).
+    // Use context theme for toggles; prop theme for rendering (they are always in sync)
+    const theme = contextTheme ?? themeProp;
     const sidebarExpanded = !collapsed || mobileOpen;
 
     const pathname = usePathname();
     const router = useRouter();
     const f = getFoundationByTheme(theme);
-    const groups = navigationConfig.sidebar.groups as NavGroup[];
+    const allGroups = navigationConfig.sidebar.groups as NavGroup[];
+    const groups = allGroups
+        .map((group) => ({
+            ...group,
+            items: group.items.filter((item) => isAdmin || !ADMIN_ONLY_NAV_IDS.has(item.id)),
+        }))
+        .filter((group) => group.items.length > 0);
 
     const isDark = theme === "dark";
     const primary = f.colors.brand.primary;
@@ -243,10 +321,26 @@ export function Sidebar({
         onCloseMobile?.();
     };
 
-    const handleLogout = () => {
+    const handleLogout = async () => {
         onCloseMobile?.();
-        // No session backend yet — simply return the user to the landing page.
-        router.push("/");
+        await onLogout?.();
+        router.push("/login");
+    };
+
+    const footerBtnBase: React.CSSProperties = {
+        display: "flex",
+        alignItems: "center",
+        gap: "0.8rem",
+        width: "100%",
+        background: "none",
+        border: "none",
+        borderRadius: "0.8rem",
+        cursor: "pointer",
+        color: muted,
+        fontSize: "1.3rem",
+        fontFamily: "inherit",
+        textAlign: "left",
+        transition: "background-color 0.15s ease",
     };
 
     const sidebarClass = [
@@ -256,36 +350,27 @@ export function Sidebar({
     ].filter(Boolean).join(" ");
 
     return (
-        <aside className={sidebarClass} style={{
-            backgroundColor: isDark ? f.colors.bg.surface : "#FFFFFF",
-            borderRightColor: border,
-            borderRightWidth: "1px",
-            borderRightStyle: "solid",
-        }} aria-label="Navegação principal">
+        <aside
+            className={sidebarClass}
+            style={{
+                backgroundColor: isDark ? f.colors.bg.surface : "#FFFFFF",
+                borderRightColor: border,
+                borderRightWidth: "1px",
+                borderRightStyle: "solid",
+            }}
+            aria-label="Navegação principal"
+        >
 
             {/* ── Logo header ── */}
             <div className={styles.header} style={{ borderBottomColor: border }}>
-                <div className={styles.logoArea}>
-                    <img src="/assets/icone_finlumia.svg" alt="" width={26} height={26} aria-hidden="true" />
-                    <span className={styles.logoText} style={{ color: primary }}>FINLUMIA</span>
-                </div>
-                {/* Desktop: collapse / expand the icon-rail */}
                 <button
-                    className={`${styles.toggleBtn} ${styles.desktopOnly}`}
+                    className={`${styles.logoArea} ${styles.logoToggleBtn}`}
                     onClick={() => onToggleCollapse?.()}
                     aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
-                    style={{ color: muted }}
+                    title={collapsed ? "Expandir menu" : "Recolher menu"}
                 >
-                    {collapsed ? ICONS.ChevronRight : ICONS.ChevronLeft}
-                </button>
-                {/* Mobile/tablet: close the drawer */}
-                <button
-                    className={`${styles.toggleBtn} ${styles.mobileOnly}`}
-                    onClick={() => onCloseMobile?.()}
-                    aria-label="Fechar menu"
-                    style={{ color: muted }}
-                >
-                    {ICONS.Close}
+                    <img src="/assets/icone_finlumia.svg" alt="" width={26} height={26} aria-hidden="true" />
+                    <span className={styles.logoText} style={{ color: primary }}>FINLUMIA</span>
                 </button>
             </div>
 
@@ -304,10 +389,10 @@ export function Sidebar({
 
                             return (
                                 <div key={item.id}>
-                                    {/* Parent item */}
                                     <button
                                         className={`${styles.navItem} ${active ? styles.active : ""}`}
                                         style={{ color: active ? primary : f.colors.text.secondary }}
+                                        data-tour={`nav-${item.id}`}
                                         onClick={() => {
                                             if (withChildren) {
                                                 if (sidebarExpanded) {
@@ -338,15 +423,12 @@ export function Sidebar({
                                         )}
                                     </button>
 
-                                    {/* Children (sub-menu) */}
                                     {withChildren && sidebarExpanded && (
-                                        <div
-                                            style={{
-                                                overflow: "hidden",
-                                                maxHeight: isOpen ? `${item.children.length * 4}rem` : "0",
-                                                transition: "max-height 0.25s cubic-bezier(0.4,0,0.2,1)",
-                                            }}
-                                        >
+                                        <div style={{
+                                            overflow: "hidden",
+                                            maxHeight: isOpen ? `${item.children.length * 4}rem` : "0",
+                                            transition: "max-height 0.25s cubic-bezier(0.4,0,0.2,1)",
+                                        }}>
                                             <div style={{
                                                 marginLeft: "1.6rem",
                                                 borderLeft: `1px solid ${border}`,
@@ -384,10 +466,70 @@ export function Sidebar({
                 ))}
             </nav>
 
-            {/* ── Footer / User ── */}
+            {/* ── Footer ── */}
             {user && (
                 <div className={styles.footer} style={{ borderTopColor: border }}>
-                    <div className={styles.userArea}>
+
+                    {/* Tutorial button */}
+                    <button
+                        type="button"
+                        onClick={startTour}
+                        title="Rever tutorial"
+                        aria-label="Rever tutorial"
+                        style={{
+                            ...footerBtnBase,
+                            padding: sidebarExpanded ? "0.7rem 1rem" : "0.7rem",
+                            marginBottom: "0.4rem",
+                            justifyContent: sidebarExpanded ? "flex-start" : "center",
+                        }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)"; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = "transparent"; }}
+                    >
+                        <span style={{
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            width: "1.8rem", height: "1.8rem", borderRadius: "50%",
+                            border: `1.5px solid ${muted}`, flexShrink: 0,
+                            fontSize: "1.1rem", fontWeight: 700,
+                        }}>?</span>
+                        {sidebarExpanded && <span>Rever tutorial</span>}
+                    </button>
+
+                    {/* Theme cycle button */}
+                    <button
+                        type="button"
+                        onClick={toggleTheme}
+                        title={`${THEME_META[theme].label} — clique para ${THEME_META[theme].next}`}
+                        aria-label={`Alterar tema: ${THEME_META[theme].label}`}
+                        style={{
+                            ...footerBtnBase,
+                            padding: sidebarExpanded ? "0.7rem 1rem" : "0.7rem",
+                            marginBottom: "0.4rem",
+                            justifyContent: sidebarExpanded ? "flex-start" : "center",
+                        }}
+                        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)"; }}
+                        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = "transparent"; }}
+                    >
+                        {/* Pill indicator showing current theme */}
+                        <span style={{
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            width: "1.8rem", height: "1.8rem", borderRadius: "50%",
+                            backgroundColor:
+                                theme === "dark" ? "#1EC6B2" :
+                                theme === "colorblind" ? "#0072B2" :
+                                "#F59E0B",
+                            color: "#fff", flexShrink: 0,
+                        }}>
+                            <ThemeIcon theme={theme} />
+                        </span>
+                        {sidebarExpanded && (
+                            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {THEME_META[theme].label}
+                            </span>
+                        )}
+                    </button>
+
+                    {/* User area */}
+                    <div className={`${styles.userArea} ${!sidebarExpanded ? styles.userAreaCollapsed : ""}`}>
                         <div className={styles.avatar} style={{ backgroundColor: primary, color: "#fff" }}>
                             {user.name.charAt(0).toUpperCase()}
                         </div>

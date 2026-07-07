@@ -30,7 +30,7 @@ export function Button({
         padding: styleConfig?.padding ?? `0 ${sizeTokens.paddingX}`,
         borderRadius: styleConfig?.borderRadius ?? buttonTokens.base.shape.borderRadius,
         border: styleConfig?.border ?? `${foundation.borderWidth.thin} solid ${variantTokens.borderColor}`,
-        opacity: disabled ? buttonTokens.base.state.disabledOpacity : 1,
+        opacity: disabled ? buttonTokens.base.state.disabledOpacity : styleConfig?.opacity ?? 1,
         textAlign: styleConfig?.align ?? "center",
         alignItems: styleConfig?.align ?? "center",
         justifyContent: styleConfig?.justifyContent ?? "center",

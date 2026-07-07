@@ -1,15 +1,24 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { NewTransactionModal } from "../organisms/NewTransactionModal";
 import { ImportModal } from "../organisms/ImportModal";
+import { ConfirmDialog } from "../organisms/ConfirmDialog";
+import { TransactionFeedback, type FeedbackKind } from "../organisms/TransactionFeedback";
+import { ConfettiBurst } from "../organisms/ConfettiBurst";
 import { Button } from "../atoms/button";
 import {
     type Transaction, type TransactionType,
+    type PaymentMethod, type InstitutionId, type CategoryId,
 } from "../../config/transactions";
 import { useFinance, type Category } from "../../shared/finance/finance.context";
+import { resolveCategoryColor } from "../../config/categoryPalette";
 import { getFoundationByTheme } from "../../shared/styles/tokens";
 import { useTheme } from "../../shared/styles/theme.context";
+import type { ThemeMode } from "../../shared/styles/theme.types";
+import { transactionsService } from "../../services/movimentation/movement.service";
+import type { TransactionCreateRequest } from "../../api/types";
 
 const PAGE_SIZE = 10;
 
@@ -28,17 +37,18 @@ function formatDate(iso: string) {
     return `${day} ${["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"][parseInt(month) - 1]}, ${year}`;
 }
 
-function CategoryBadge({ cat, f }: { cat?: Category; f: ReturnType<typeof getFoundationByTheme> }) {
+function CategoryBadge({ cat, f, theme }: { cat?: Category; f: ReturnType<typeof getFoundationByTheme>; theme: ThemeMode }) {
     if (!cat) return <span style={{ color: f.colors.text.muted }}>—</span>;
+    const { fg, bg, border } = resolveCategoryColor(cat.id, theme, cat.color);
     return (
         <span style={{
             display: "inline-flex", alignItems: "center",
             padding: "0.25rem 0.75rem", borderRadius: "999px",
             fontSize: "1.1rem", fontWeight: 600, letterSpacing: "0.04em",
             textTransform: "uppercase",
-            color: cat.color,
-            backgroundColor: cat.bgColor,
-            border: `1px solid ${cat.color}40`,
+            color: fg,
+            backgroundColor: bg,
+            border: `1px solid ${border}`,
         }}>
             {cat.label}
         </span>
@@ -69,15 +79,41 @@ export function MovimentationPage() {
     const isDark = theme === "dark";
 
     const {
-        transactions, addTransaction, addTransactions, removeTransaction,
+        transactions,
+        appendTransaction,
+        updateTransaction,
+        removeTransaction,
+        refreshTransactions,
+        isLoadingTransactions,
         categories, paymentMethods, categoryById, bankById,
+        loadData,
     } = useFinance();
 
+    useEffect(() => { loadData(); }, [loadData]);
+
+    const router = useRouter();
+    const searchParams = useSearchParams();
+
     const [showNew, setShowNew] = useState(false);
+
+    // Atalho global (FAB/painel inicial): "?new=1" abre o modal de lançamento
+    // direto, sem exigir navegar manualmente até Movimentações > Transações.
+    useEffect(() => {
+        if (searchParams.get("new") === "1") {
+            setShowNew(true);
+            router.replace("/dashboard/movimentation/transactions");
+        }
+    }, [searchParams, router]);
     const [showImport, setShowImport] = useState(false);
     const [page, setPage] = useState(1);
     const [filter, setFilter] = useState<Filter>({ type: "all", category: "all", search: "" });
     const [selected, setSelected] = useState<Set<string>>(new Set());
+    const [apiError, setApiError] = useState("");
+    const [confirmDelete, setConfirmDelete] = useState<Transaction | null>(null);
+    const [feedback, setFeedback] = useState<{ kind: FeedbackKind; description: string } | null>(null);
+    const [editingTx, setEditingTx] = useState<Transaction | null>(null);
+    const [confettiTrigger, setConfettiTrigger] = useState(0);
+    const [confettiColors, setConfettiColors] = useState<string[]>([]);
 
     const filtered = useMemo(() => {
         return transactions.filter((t) => {
@@ -94,17 +130,57 @@ export function MovimentationPage() {
     const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
     const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-    const handleSave = (tx: Omit<Transaction, "id">) => {
-        addTransaction(tx);
+    const handleSave = async (tx: Omit<Transaction, "id">) => {
+        setApiError("");
+        const req: TransactionCreateRequest = {
+            type: tx.type,
+            method: tx.method as PaymentMethod,
+            institution: tx.institution as InstitutionId,
+            date: tx.date,
+            category: tx.category as CategoryId,
+            description: tx.description,
+            subDescription: tx.subDescription,
+            amount: tx.amount,
+            notes: tx.notes,
+        };
+        if (editingTx) {
+            const updated = await transactionsService.update(editingTx.id, req);
+            updateTransaction(editingTx.id, updated as unknown as Transaction);
+            setEditingTx(null);
+            return;
+        }
+
+        const created = await transactionsService.create(req);
+        (created as unknown as Transaction[]).forEach((t) => appendTransaction(t));
+        const kind: FeedbackKind = tx.category === "investimento" ? "investimento" : tx.type;
+        setFeedback({ kind, description: tx.description });
+
+        // Confete só para lançamentos que são uma boa notícia (receita/investimento) —
+        // despesa continua só com a notificação padrão, sem comemoração.
+        if (kind !== "despesa") {
+            setConfettiColors(
+                kind === "investimento"
+                    ? [f.colors.brand.primary, f.colors.brand.accent, resolveCategoryColor("investimento", theme).fg, f.colors.brand.secondary]
+                    : [f.colors.brand.primary, f.colors.brand.accent, f.colors.feedback.success, f.colors.brand.secondary],
+            );
+            setConfettiTrigger((n) => n + 1);
+        }
     };
 
-    const handleImport = (txs: Omit<Transaction, "id">[]) => {
-        addTransactions(txs);
+    const handleEdit = (tx: Transaction) => {
+        setEditingTx(tx);
+        setShowNew(true);
     };
 
-    const handleDelete = (id: string) => {
-        removeTransaction(id);
-        setSelected((prev) => { const s = new Set(prev); s.delete(id); return s; });
+    const handleDelete = async (id: string) => {
+        setApiError("");
+        try {
+            await transactionsService.delete(id);
+            removeTransaction(id);
+            setSelected((prev) => { const s = new Set(prev); s.delete(id); return s; });
+        } catch (err: unknown) {
+            setApiError((err as { message?: string })?.message ?? "Erro ao excluir transação.");
+        }
     };
 
     const toggleSelect = (id: string) => {
@@ -195,6 +271,10 @@ export function MovimentationPage() {
         return pages;
     };
 
+    const showCount = filtered.length > 0
+        ? `${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, filtered.length)}`
+        : "0";
+
     return (
         <div className="page-responsive" style={{ fontFamily: f.typography.fontFamily.base, maxWidth: "140rem" }}>
 
@@ -208,7 +288,7 @@ export function MovimentationPage() {
                         Movimentações
                     </h1>
                     <div style={{ display: "flex", gap: "0.8rem" }}>
-                        <div title="Em breve — funcionalidade em desenvolvimento" style={{ display: "inline-flex" }}>
+                        <span title="Em breve">
                             <Button
                                 label="Importar extrato"
                                 type="button"
@@ -219,13 +299,13 @@ export function MovimentationPage() {
                                 onClick={() => {}}
                                 styleConfig={{
                                     backgroudColor: "transparent",
-                                    textColor: muted,
+                                    textColor: f.colors.text.secondary,
                                     border: `1px solid ${border}`,
                                     borderRadius: "0.8rem",
                                     padding: "0 1.6rem",
                                 }}
                             />
-                        </div>
+                        </span>
                         <Button
                             label="+ Nova movimentação"
                             type="button"
@@ -245,6 +325,18 @@ export function MovimentationPage() {
                     </div>
                 </div>
             </div>
+
+            {/* Error banner */}
+            {apiError && (
+                <div style={{
+                    marginTop: "1.2rem", padding: "1rem 1.4rem", borderRadius: "0.8rem",
+                    backgroundColor: isDark ? f.colors.feedback.errorBg : "#FEF2F2",
+                    border: `1px solid ${f.colors.feedback.error}`,
+                    color: f.colors.feedback.error, fontSize: "1.3rem",
+                }}>
+                    {apiError}
+                </div>
+            )}
 
             {/* Filters bar */}
             <div style={{
@@ -333,7 +425,19 @@ export function MovimentationPage() {
                             </tr>
                         </thead>
                         <tbody>
-                            {paged.length === 0 ? (
+                            {isLoadingTransactions ? (
+                                <tr>
+                                    <td colSpan={7} style={{ ...tdCellStyle, textAlign: "center", padding: "4rem", color: muted, border: "none" }}>
+                                        <div style={{ display: "inline-flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
+                                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={primary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: "spin 1s linear infinite" }}>
+                                                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                                            </svg>
+                                            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+                                            <span>Carregando movimentações...</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ) : paged.length === 0 ? (
                                 <tr>
                                     <td colSpan={7} style={{ ...tdCellStyle, textAlign: "center", padding: "4rem", color: muted, border: "none" }}>
                                         Nenhuma movimentação encontrada.
@@ -393,7 +497,7 @@ export function MovimentationPage() {
                                         </td>
 
                                         <td style={tdCellStyle}>
-                                            <CategoryBadge cat={categoryById(tx.category)} f={f} />
+                                            <CategoryBadge cat={categoryById(tx.category)} f={f} theme={theme} />
                                         </td>
 
                                         <td style={tdCellStyle}>
@@ -417,18 +521,19 @@ export function MovimentationPage() {
                                                 <button
                                                     type="button"
                                                     aria-label={`Editar ${tx.description}`}
+                                                    onClick={() => handleEdit(tx)}
                                                     style={{ background: "none", border: "none", color: muted, cursor: "pointer", padding: "0.4rem", borderRadius: "0.4rem" }}
                                                     title="Editar"
                                                 >
                                                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                                                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                                        <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                                                        <path d="m15 5 4 4" />
                                                     </svg>
                                                 </button>
                                                 <button
                                                     type="button"
                                                     aria-label={`Excluir ${tx.description}`}
-                                                    onClick={() => handleDelete(tx.id)}
+                                                    onClick={() => setConfirmDelete(tx)}
                                                     style={{ background: "none", border: "none", color: muted, cursor: "pointer", padding: "0.4rem", borderRadius: "0.4rem" }}
                                                     title="Excluir"
                                                 >
@@ -446,37 +551,64 @@ export function MovimentationPage() {
                 </div>
 
                 {/* Table footer */}
-                <div style={{
-                    display: "flex", alignItems: "center", justifyContent: "space-between",
-                    padding: "1.2rem 2rem", borderTop: `1px solid ${border}`,
-                    flexWrap: "wrap", gap: "1rem",
-                }}>
-                    <span style={{ fontSize: "1.2rem", color: muted }}>
-                        Mostrando{" "}
-                        <strong style={{ color: f.colors.text.secondary }}>{(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)}</strong>
-                        {" "}de{" "}
-                        <strong style={{ color: f.colors.text.secondary }}>{filtered.length}</strong>
-                        {" "}resultados
-                    </span>
-                    <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
-                        {renderPagination()}
+                {!isLoadingTransactions && (
+                    <div style={{
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        padding: "1.2rem 2rem", borderTop: `1px solid ${border}`,
+                        flexWrap: "wrap", gap: "1rem",
+                    }}>
+                        <span style={{ fontSize: "1.2rem", color: muted }}>
+                            {filtered.length > 0 ? (
+                                <>
+                                    Mostrando{" "}
+                                    <strong style={{ color: f.colors.text.secondary }}>{showCount}</strong>
+                                    {" "}de{" "}
+                                    <strong style={{ color: f.colors.text.secondary }}>{filtered.length}</strong>
+                                    {" "}resultados
+                                </>
+                            ) : "Nenhum resultado"}
+                        </span>
+                        <div style={{ display: "flex", gap: "0.4rem", alignItems: "center" }}>
+                            {renderPagination()}
+                        </div>
                     </div>
-                </div>
+                )}
             </div>
 
             {/* Modals */}
             <NewTransactionModal
                 open={showNew}
-                onClose={() => setShowNew(false)}
+                onClose={() => { setShowNew(false); setEditingTx(null); }}
                 onSave={handleSave}
+                initial={editingTx}
                 theme={theme}
             />
             <ImportModal
                 open={showImport}
                 onClose={() => setShowImport(false)}
-                onImport={handleImport}
+                onSuccess={refreshTransactions}
                 theme={theme}
             />
+            <ConfirmDialog
+                open={!!confirmDelete}
+                onClose={() => setConfirmDelete(null)}
+                onConfirm={() => confirmDelete && handleDelete(confirmDelete.id)}
+                title="Excluir movimentação"
+                message={confirmDelete && (
+                    <>
+                        Tem certeza que deseja excluir <strong>{confirmDelete.description}</strong>
+                        {" "}({formatCurrency(confirmDelete.amount)})? Essa ação não pode ser desfeita.
+                    </>
+                )}
+                theme={theme}
+            />
+            <TransactionFeedback
+                kind={feedback?.kind ?? null}
+                description={feedback?.description}
+                onDone={() => setFeedback(null)}
+                theme={theme}
+            />
+            <ConfettiBurst trigger={confettiTrigger} colors={confettiColors} />
         </div>
     );
 }

@@ -1,162 +1,276 @@
 # Finlumia Frontend
 
-Frontend da plataforma **Finlumia** — aplicação web para clareza financeira pessoal e gestão de movimentações. Construído com **Next.js 15** (App Router), **React 19** e **TypeScript**, seguindo **Atomic Design** para a camada de UI e separação por **domínios de serviço** para integração com microserviços de backend.
+Frontend da plataforma **Finlumia** — gestão financeira pessoal. Construído com **Next.js 15** (App Router), **React 19** e **TypeScript**, integrado a 4 microserviços Spring Boot via camada de serviços tipada.
 
 ---
 
-## Índice
+## Sumário
 
-- [Visão geral](#visão-geral)
-- [Stack tecnológica](#stack-tecnológica)
-- [Funcionalidades implementadas](#funcionalidades-implementadas)
+- [Início rápido](#início-rápido)
+- [Pré-requisitos](#pré-requisitos)
+- [Configuração do ambiente](#configuração-do-ambiente)
+- [Formas de execução](#formas-de-execução)
+  - [1. Local sem Docker](#1-local-sem-docker)
+  - [2. Docker — desenvolvimento (Windows)](#2-docker--desenvolvimento-windows)
+  - [3. Docker — produção (Linux / VPS)](#3-docker--produção-linux--vps)
+- [Entendendo os ambientes](#entendendo-os-ambientes)
 - [Arquitetura](#arquitetura)
 - [Estrutura de pastas](#estrutura-de-pastas)
-- [Rotas da aplicação](#rotas-da-aplicação)
-- [Design system e temas](#design-system-e-temas)
-- [Estado da aplicação (FinanceProvider)](#estado-da-aplicação-financeprovider)
-- [Navegação (Sidebar)](#navegação-sidebar)
-- [Integração com backend](#integração-com-backend)
-- [Responsividade](#responsividade)
-- [Pré-requisitos](#pré-requisitos)
-- [Como executar](#como-executar)
-- [Variáveis de ambiente](#variáveis-de-ambiente)
-- [Scripts npm](#scripts-npm)
-- [Docker e Dev Container](#docker-e-dev-container)
-- [Convenções de desenvolvimento](#convenções-de-desenvolvimento)
-- [Documentação complementar](#documentação-complementar)
+- [Microserviços e endpoints](#microserviços-e-endpoints)
+- [Guia de desenvolvimento](#guia-de-desenvolvimento)
 
 ---
 
-## Visão geral
+## Início rápido
 
-A Finlumia centraliza receitas, despesas, orçamentos e relatórios em uma interface única. O frontend é responsável por:
+> **Quer só rodar o projeto agora?** Três passos:
 
-- **Marketing e aquisição** — landing page, login, cadastro e recuperação de senha.
-- **Dashboard autenticado** — painel resumido, movimentações, orçamentos, cadastros auxiliares e relatórios.
-- **Configurador administrativo** — gestão de metadados de banco (tabelas, campos, usuários, permissões, funções, índices e triggers).
-- **Suporte** — abertura de tickets e documentação interna do projeto.
+```bash
+# 1. Clone e entre na pasta
+git clone <repo-url> && cd finlumia_frontend
 
-O projeto prioriza **componentização reutilizável**, **tokens de design** para temas claro/escuro alinhados à identidade visual (paleta teal da logo) e **preparação para API** via contratos tipados e catálogo centralizado de endpoints.
+# 2. Configure as variáveis de ambiente
+cp .env.example .env.local
+# edite .env.local com as URLs dos microserviços do seu ambiente
 
----
+# 3. Suba o projeto
+npm install && npm run dev          # opção A — Node local
+./finlumia.ps1 -up                  # opção B — Docker (Windows)
+./finlumia.sh  -up                  # opção C — Docker (Linux/VPS, modo produção)
+```
 
-## Stack tecnológica
-
-| Tecnologia | Versão | Uso |
-|------------|--------|-----|
-| [Next.js](https://nextjs.org) | 15.x | App Router, SSR/SSG, build e roteamento |
-| React | 19.x | Camada de UI e hooks |
-| TypeScript | 6.x | Tipagem estática em todo o código |
-| CSS Modules | — | Estilos encapsulados por componente |
-| CSS global + utilitários | — | Tokens, tema, responsividade |
-| ESLint | 10.x | Qualidade e consistência de código |
-
-Ambiente de desenvolvimento em container: **AlmaLinux 10** + **Node.js 24 LTS** (`docker/scripts/finlumia_front.Dockerfile`).
+Acesse [http://localhost:3000](http://localhost:3000).
 
 ---
 
-## Funcionalidades implementadas
+## Pré-requisitos
 
-### Público (sem autenticação)
+Escolha **uma** das formas de execução abaixo e instale apenas os requisitos correspondentes:
 
-| Rota | Descrição |
-|------|-----------|
-| `/` | Landing page com hero, recursos, passos, oferta de lançamento, FAQ e CTA |
-| `/login` | Autenticação com e-mail/senha e link para cadastro |
-| `/register` | Cadastro com validação, medidor de força de senha e aceite de termos |
-| `/forgot-password` | Solicitação de redefinição de senha |
-| `/reset-password` | Redefinição de senha com token |
+| Forma | Requisitos |
+|-------|------------|
+| **Local** | Node.js 24 LTS + npm |
+| **Docker — dev (Windows)** | Docker Desktop (com daemon em execução) + PowerShell |
+| **Docker — produção (Linux/VPS)** | Docker Engine + Bash |
 
-### Dashboard (`/dashboard/*`)
+> O Node.js não precisa estar instalado na máquina host ao usar Docker — ele roda dentro do container.
 
-| Módulo | Rotas | Descrição |
-|--------|-------|-----------|
-| **Painel** | `/dashboard` | KPIs e movimentações recentes |
-| **Movimentações** | `/dashboard/movimentation/transactions` | Listagem, filtros, novo lançamento e importação |
-| | `/dashboard/movimentation/budget` | Orçamentos mensais por setor, forma de pagamento ou banco, com alertas de estouro |
-| | `/dashboard/movimentation/categories` | Catálogo de categorias (padrão + personalizadas) |
-| | `/dashboard/movimentation/banks` | Catálogo de bancos (padrão + personalizados) |
-| | `/dashboard/movimentation/payment-methods` | Formas de pagamento (padrão + personalizadas) |
-| **Relatórios** | `/dashboard/reports` | Gráficos e insights financeiros |
-| **Configurador** | `/dashboard/configurator/*` | CRUD de metadados (tabelas, campos, usuários, etc.) |
-| **Suporte** | `/dashboard/support/ticket` | Abertura de chamados |
-| | `/dashboard/support/documentation` | Documentação interna do frontend |
+---
 
-> A rota `/dashboard/movimentation` redireciona automaticamente para `/dashboard/movimentation/transactions`.
+## Configuração do ambiente
+
+O arquivo `.env.local` é **obrigatório** antes de qualquer execução. Ele nunca é versionado.
+
+```bash
+cp .env.example .env.local
+```
+
+Abra `.env.local` e ajuste as variáveis para o seu ambiente:
+
+```env
+# Define qual conjunto de URLs de API usar
+NEXT_PUBLIC_APP_ENV=local          # local | homologation | production
+
+# Versão dos endpoints REST
+NEXT_PUBLIC_API_VERSION=v1
+
+# URLs dos microserviços — ambiente LOCAL
+NEXT_PUBLIC_SERVICE_IDENTIFICATION_LOCAL=http://localhost:8080/identification
+NEXT_PUBLIC_SERVICE_MOVIMENTATION_LOCAL=http://localhost:8080/movimentation
+NEXT_PUBLIC_SERVICE_DOCUMENT_LOCAL=http://localhost:8080/document
+NEXT_PUBLIC_SERVICE_CONFIGURATOR_LOCAL=http://localhost:8080/configurator
+
+# URLs para homologação e produção (ver .env.example para lista completa)
+# NEXT_PUBLIC_SERVICE_IDENTIFICATION_HOMOLOGATION=https://<seu-host-homologacao>/identification
+# NEXT_PUBLIC_SERVICE_IDENTIFICATION_PRODUCTION=https://apifinlumia.thiagobenevide.com.br/identification
+```
+
+> **Importante:** variáveis `NEXT_PUBLIC_*` são incorporadas no build pelo Next.js. Alterar o `.env.local` após o build de produção **não** tem efeito — é necessário rebuildar.
+
+---
+
+## Formas de execução
+
+### 1. Local sem Docker
+
+Recomendado para desenvolvimento rápido com hot-reload sem overhead de container.
+
+**Requisito:** Node.js 24+ instalado localmente.
+
+```bash
+npm install
+npm run dev
+```
+
+| Comando | Descrição |
+|---------|-----------|
+| `npm run dev` | Servidor de desenvolvimento com hot-reload (porta 3000) |
+| `npm run build` | Gera build de produção otimizado |
+| `npm run start` | Serve o build de produção (requer `build` antes) |
+| `npm run lint` | Verifica qualidade de código com ESLint |
+
+---
+
+### 2. Docker — desenvolvimento (Windows)
+
+Usa o script `finlumia.ps1` para gerenciar um container com **hot-reload ativo** (`npm run dev`).  
+O repositório é montado como volume — alterações no código aparecem imediatamente no container.
+
+**Requisito:** Docker Desktop em execução.
+
+```powershell
+# Primeira vez (ou após alterar o Dockerfile)
+./finlumia.ps1 -up -Build
+
+# Execuções seguintes
+./finlumia.ps1 -up
+
+# Outros comandos úteis
+./finlumia.ps1 -Logs     # Acompanhar logs em tempo real
+./finlumia.ps1 -Shell    # Abrir terminal dentro do container
+./finlumia.ps1 -down     # Parar e remover o container
+```
+
+**O que acontece internamente:**
+
+```
+docker build  →  docker run  →  npm install  →  npm run dev --hostname 0.0.0.0
+```
+
+O container expõe a porta `3000`. O `.env.local` é lido pelo Next.js a partir do volume montado em `/workspace`.
+
+---
+
+### 3. Docker — produção (Linux / VPS)
+
+Usa o script `finlumia.sh` para executar o **build de produção otimizado** dentro do container.  
+Indicado para servidor remoto (VPS, VM, servidor Linux). O container reinicia automaticamente após falhas ou reboots.
+
+**Requisito:** Docker Engine instalado no servidor Linux.
+
+```bash
+chmod +x finlumia.sh
+
+# Primeira vez (ou após atualizar o Dockerfile)
+./finlumia.sh -up -Build
+
+# Execuções seguintes (ex.: após pull de nova versão)
+./finlumia.sh -up
+
+# Outros comandos
+./finlumia.sh -Logs     # Acompanhar logs (o build pode levar ~2–5 min)
+./finlumia.sh -Shell    # Terminal no container
+./finlumia.sh -down     # Parar e remover o container
+```
+
+**O que acontece internamente:**
+
+```
+docker build  →  docker run  →  npm install  →  npm run build  →  npm run start
+                                (--include=dev)  (NODE_ENV=production)
+```
+
+> O `npm install --include=dev` é necessário porque `typescript` e `@types/*` são `devDependencies` exigidos pelo `next build`. O `NODE_ENV=production` é aplicado apenas nos comandos `build` e `start`.
+
+O container usa `--restart unless-stopped` e o `.env.local` é passado via `--env-file` ao `docker run`.
+
+---
+
+## Entendendo os ambientes
+
+```
+NEXT_PUBLIC_APP_ENV  →  define qual conjunto de URLs é usado em runtime
+```
+
+```mermaid
+flowchart LR
+    subgraph config [".env.local"]
+        A["NEXT_PUBLIC_APP_ENV=local"]
+        B["NEXT_PUBLIC_APP_ENV=homologation"]
+        C["NEXT_PUBLIC_APP_ENV=production"]
+    end
+
+    subgraph frontend ["Next.js (Endpoints.ts)"]
+        D["Seleciona URLs _LOCAL"]
+        E["Seleciona URLs _HOMOLOGATION"]
+        F["Seleciona URLs _PRODUCTION"]
+    end
+
+    subgraph backend ["Microserviços"]
+        G["API local / Docker Compose"]
+        H["API de homologação"]
+        I["API de produção"]
+    end
+
+    A --> D --> G
+    B --> E --> H
+    C --> F --> I
+```
+
+| Ambiente | `APP_ENV` | Quando usar |
+|----------|-----------|-------------|
+| **Local** | `local` | Desenvolvimento com microserviços rodando localmente |
+| **Homologação** | `homologation` | Testes integrados contra API de staging |
+| **Produção** | `production` | Deploy real no servidor |
+
+### Diferença entre os modos de execução
+
+| Aspecto | Dev (ps1 / `npm run dev`) | Produção (sh / `npm run start`) |
+|---------|---------------------------|---------------------------------|
+| Hot-reload | Sim | Não |
+| Build necessário | Não | Sim (antes do start) |
+| Otimização | Não | Sim (minificação, tree-shaking) |
+| Source maps | Sim | Não (por padrão) |
+| Tempo de start | ~5 s | ~2–5 min (build) |
+| Restart automático | Não | Sim (`unless-stopped`) |
+| Uso recomendado | Desenvolvimento local | VPS / servidor |
 
 ---
 
 ## Arquitetura
 
-### Diagrama de camadas
+### Fluxo de uma requisição
 
-```mermaid
-flowchart TB
-    subgraph browser [Browser]
-        UI[Páginas React]
-    end
-
-    subgraph next [Next.js App Router]
-        Layout[layout.tsx + providers]
-        Routes[app/**/page.tsx]
-    end
-
-    subgraph ui [UI — Atomic Design]
-        Atoms[atoms]
-        Molecules[molecules]
-        Organisms[organisms]
-        Pages[components/pages]
-    end
-
-    subgraph state [Estado client-side]
-        Theme[ThemeProvider]
-        Finance[FinanceProvider]
-    end
-
-    subgraph config [Configuração]
-        Nav[navigation.json]
-        Tx[transactions.ts]
-        API[api/Endpoints.ts]
-    end
-
-    subgraph backend [Backend — microserviços]
-        MS1[identification]
-        MS2[movimentation]
-        MS3[document]
-        MS4[configurator]
-    end
-
-    UI --> Layout
-    Layout --> Theme
-    Layout --> Finance
-    Layout --> Routes
-    Routes --> Pages
-    Pages --> Organisms
-    Organisms --> Molecules
-    Molecules --> Atoms
-    Pages --> Finance
-    Organisms --> Nav
-    API --> backend
+```
+Browser
+  └─▶ Next.js App Router (src/app/**/page.tsx)
+        └─▶ dashboard/layout.tsx  ──┬──  TourProvider
+                                    ├──  AuthContext (JWT, refresh automático)
+                                    ├──  FinanceProvider (catálogos + transações)
+                                    └──  Sidebar
+        └─▶ components/pages/<Page>.tsx
+              └─▶ services/<domínio>/<serviço>.ts  (fetch + Bearer token)
+                    └─▶ Microserviço Spring Boot (identification / movimentation / document / configurator)
 ```
 
-### Princípios
+### Camadas
 
-1. **App Router** — Cada URL é um `page.tsx` em `src/app/`. Layouts aninhados (`dashboard/layout.tsx`) compartilham sidebar e providers.
-2. **Atomic Design** — Granularidade crescente: `atoms` → `molecules` → `organisms` → `pages`. Templates reservados para layouts estruturais futuros.
-3. **Separação UI / lógica** — Componentes visuais não chamam API diretamente. Orquestração em `features/` (planejado) e HTTP em `services/<domínio>/`.
-4. **Design tokens** — Cores, tipografia e espaçamentos em `src/shared/styles/tokens/`, com fundações `light` e `dark`.
-5. **Configuração declarativa** — Menu lateral (`navigation.json`), transações mock (`transactions.ts`) e endpoints (`api/endpoints/*.json`) como fontes de verdade.
-6. **Client components onde necessário** — `"use client"` em páginas com hooks, eventos ou contexto (tema, finanças).
+| Camada | Localização | Responsabilidade |
+|--------|-------------|------------------|
+| **Rotas** | `src/app/**/page.tsx` | Declaração de URL, metadata, layout aninhado |
+| **Pages** | `src/components/pages/` | Telas completas, orquestram contextos e serviços |
+| **Organisms** | `src/components/organisms/` | Seções complexas reutilizáveis (Sidebar, Modal, DataTable…) |
+| **Atoms / Molecules** | `src/components/atoms/` | Primitivos visuais (Button, Input, Charts…) |
+| **Contexts** | `src/contexts/` | Estado global: auth, tour |
+| **Shared state** | `src/shared/finance/` | Estado financeiro compartilhado no dashboard |
+| **Services** | `src/services/<domínio>/` | Clientes HTTP por microserviço |
+| **HTTP Client** | `src/lib/http-client.ts` | fetch wrapper com refresh de token JWT (401 automático) |
+| **Endpoints** | `src/api/Endpoints.ts` | Catálogo central de URLs, seleção por ambiente |
+| **Tipos API** | `src/api/types.ts` | Tipos TypeScript dos contratos de cada serviço |
 
-### Atomic Design — inventário
+### Autenticação
 
-| Camada | Responsabilidade | Exemplos |
-|--------|------------------|----------|
-| **atoms** | Primitivos visuais | `Button`, `Text`, `Icon`, `Image`, `Input`, charts (`BarChart`, `DonutChart`, …) |
-| **molecules** | Composição simples | `Logo` |
-| **organisms** | Seções complexas | `Header`, `HeroSection`, `Sidebar`, `Modal`, `DataTable`, `CrudModal`, `NewTransactionModal`, `ImportModal` |
-| **pages** | Telas completas (sem rota Next) | `LandingPage`, `DashboardPage`, `MovimentationPage`, `BudgetPage`, … |
-| **templates** | Layouts estruturais | Reservado |
+```
+Login  →  POST /auth/login  →  { accessToken, refreshToken }
+                                    ↓
+                            localStorage (chaves internas)
+                                    ↓
+                    Toda requisição: Authorization: Bearer <accessToken>
+                                    ↓
+                          401 recebido?  →  POST /auth/refresh
+                                              ↓ sucesso: retry original
+                                              ↓ falha: redirect /login
+```
 
 ---
 
@@ -164,371 +278,121 @@ flowchart TB
 
 ```text
 finlumia_frontend/
-├── .devcontainer/              # Dev Containers (Cursor / VS Code)
-├── docker/scripts/             # Dockerfile de desenvolvimento
-├── docs/                       # Guias de manutenção de componentes
-├── public/assets/              # Assets estáticos (logo, hero, favicon)
+│
+├── docker/scripts/
+│   └── finlumia_front.Dockerfile   # AlmaLinux 10 + Node 24 + Docker CLI
+│
+├── .devcontainer/                   # Dev Container (VS Code / Cursor)
+│
+├── public/assets/                   # Logo, favicon, imagens estáticas
+│
 ├── src/
-│   ├── app/                    # App Router — rotas e layouts
-│   │   ├── layout.tsx          # Layout raiz (metadata, providers, globals)
-│   │   ├── page.tsx            # Landing (/)
-│   │   ├── login/              # Autenticação
-│   │   ├── register/
-│   │   ├── forgot-password/
-│   │   ├── reset-password/
-│   │   └── dashboard/          # Área autenticada
-│   │       ├── layout.tsx      # Sidebar + FinanceProvider + topbar mobile
-│   │       ├── dashboard.module.css
-│   │       ├── movimentation/  # Transações, orçamento, cadastros
-│   │       ├── reports/
-│   │       ├── configurator/
-│   │       └── support/
+│   ├── app/                         # App Router — rotas e layouts Next.js
+│   │   ├── layout.tsx               # Raiz: ThemeProvider + globals
+│   │   ├── page.tsx                 # Landing page (/)
+│   │   ├── login/                   # /login
+│   │   ├── register/                # /register
+│   │   ├── forgot-password/         # /forgot-password
+│   │   ├── reset-password/          # /reset-password
+│   │   └── dashboard/               # Área autenticada (/dashboard/*)
+│   │       ├── layout.tsx           # TourProvider + AuthGuard + FinanceProvider + Sidebar
+│   │       ├── movimentation/       # Transações, orçamento, categorias, bancos
+│   │       ├── reports/             # Relatórios e gráficos
+│   │       ├── configurator/        # CRUD de metadados (tabelas, campos, usuários…)
+│   │       └── support/             # Tickets e documentação
+│   │
 │   ├── api/
-│   │   ├── Endpoints.ts        # Montagem de URLs por ambiente
-│   │   ├── types.ts            # Tipos derivados dos contratos JSON
-│   │   └── endpoints/          # Contratos por domínio (*.endpoints.json)
-│   ├── assets/                 # SVGs fonte (ex.: icone_finlumia.svg)
+│   │   ├── Endpoints.ts             # Monta URLs selecionando por NEXT_PUBLIC_APP_ENV
+│   │   ├── types.ts                 # Tipos de request/response de todos os serviços
+│   │   └── endpoints/               # Contratos JSON por domínio
+│   │
 │   ├── components/
-│   │   ├── atoms/
-│   │   ├── molecules/
-│   │   ├── organisms/
-│   │   ├── pages/
-│   │   └── templates/
+│   │   ├── atoms/                   # Button, Input, Charts, Text…
+│   │   ├── molecules/               # Logo, composições simples
+│   │   ├── organisms/               # Sidebar, Modal, DataTable, ImportModal…
+│   │   │   └── Tour/                # TourOverlay — tutorial interativo
+│   │   └── pages/                   # Telas completas (sem rota Next.js própria)
+│   │
+│   ├── contexts/
+│   │   ├── auth.context.tsx         # useAuth() — user, tokens, isAuthenticated
+│   │   └── tour.context.tsx         # useTour() — tutorial de onboarding
+│   │
+│   ├── lib/
+│   │   └── http-client.ts           # fetch wrapper com JWT e auto-refresh
+│   │
+│   ├── services/
+│   │   ├── identification/          # authService, profileService
+│   │   ├── configurator/            # configuratorService
+│   │   ├── movimentation/           # transactionsService, categoriesService…
+│   │   └── document/                # reportsService, exportService
+│   │
 │   ├── config/
-│   │   ├── navigation.json     # Estrutura do menu lateral
-│   │   ├── transactions.ts     # Tipos, catálogos padrão e mocks
-│   │   ├── reports.ts
-│   │   └── configurator.ts
-│   ├── features/               # Casos de uso (reservado)
-│   ├── services/               # Clientes HTTP por domínio (reservado)
+│   │   ├── navigation.json          # Estrutura declarativa do menu lateral
+│   │   └── transactions.ts          # Tipos e catálogos padrão
+│   │
 │   └── shared/
 │       ├── finance/
-│       │   └── finance.context.tsx   # Estado de transações, catálogos e orçamentos
-│       ├── styles/
-│       │   ├── globals.css
-│       │   ├── theme.css
-│       │   ├── responsive.css      # Utilitários (.page-responsive, .grid-responsive)
-│       │   ├── theme.context.tsx
-│       │   └── tokens/
-│       └── constants/ | hooks/ | utils/ | types/
-├── finlumia.ps1                # Automação Docker (Windows, dev)
-├── finlumia.sh                 # Automação Docker (Linux/VPS, build + start)
+│       │   └── finance.context.tsx  # Catálogos + transações (useFinance())
+│       └── styles/
+│           ├── tokens/              # Design tokens: cores, tipografia (light/dark)
+│           ├── theme.context.tsx    # useTheme() — alternância claro/escuro
+│           ├── globals.css
+│           ├── theme.css
+│           └── responsive.css       # .page-responsive, .grid-responsive
+│
+├── finlumia.ps1                     # Gerenciador Docker — Windows (dev)
+├── finlumia.sh                      # Gerenciador Docker — Linux/VPS (produção)
+├── .env.example                     # Modelo de variáveis de ambiente
 ├── next.config.ts
-├── package.json
-└── tsconfig.json
-```
-
-**Alias de importação:** `@/*` → `src/*` (configurado em `tsconfig.json`).
-
----
-
-## Rotas da aplicação
-
-### Fluxo de renderização
-
-1. Usuário acessa uma URL (ex.: `/dashboard/movimentation/budget`).
-2. Next.js resolve `src/app/dashboard/movimentation/budget/page.tsx`.
-3. `src/app/layout.tsx` envolve com `ThemeProvider` e estilos globais.
-4. `src/app/dashboard/layout.tsx` adiciona `FinanceProvider`, `Sidebar`, topbar mobile e container centralizado.
-5. A page importa o componente de `components/pages/` e renderiza.
-
-### Metadata
-
-Rotas públicas e de dashboard definem `metadata` (title, description) nos respectivos `page.tsx` para SEO e abas do navegador.
-
----
-
-## Design system e temas
-
-### Paleta
-
-A identidade visual segue a **logo Finlumia** (gradiente teal). Tokens em:
-
-- `src/shared/styles/tokens/foundation/light.ts`
-- `src/shared/styles/tokens/foundation/dark.ts`
-
-Categorias de token: `brand`, `bg`, `text`, `border`, `feedback` (success, warning, error, info).
-
-### Alternância de tema
-
-| Recurso | Caminho |
-|---------|---------|
-| Contexto React | `src/shared/styles/theme.context.tsx` |
-| Persistência | `localStorage` (`finlumia-theme`) |
-| Atributo DOM | `data-theme="light"` \| `"dark"` em `<html>` |
-| Gradientes de fundo | `src/shared/styles/theme.css` |
-
-O clique no ícone do logo alterna entre claro e escuro.
-
-### Utilitários responsivos
-
-Definidos em `src/shared/styles/responsive.css`:
-
-| Classe | Comportamento |
-|--------|---------------|
-| `.page-responsive` | Container de página com padding responsivo, `max-width` e **centralização horizontal** (`margin-inline: auto`) |
-| `.grid-responsive` | Grid que empilha em mobile e usa `--grid-cols` no desktop |
-| `.grid-pair` | Grid 2 colunas a partir de 640px |
-| `.scroll-x` | Scroll horizontal para tabelas largas |
-
-Variável CSS opcional: `--page-max-width` (padrão `120rem`) para ajustar largura máxima por página.
-
----
-
-## Estado da aplicação (FinanceProvider)
-
-`src/shared/finance/finance.context.tsx` centraliza dados financeiros no dashboard (client-side, com persistência em `localStorage` até integração com API).
-
-### Responsabilidades
-
-| Domínio | Operações |
-|---------|-----------|
-| **Categorias** | Lista padrão + customizadas; `addCategory`, `removeCategory` |
-| **Bancos** | Lista padrão + customizados; `addBank`, `removeBank` |
-| **Formas de pagamento** | Lista padrão + customizadas; `addPaymentMethod`, `removePaymentMethod` |
-| **Transações** | CRUD em memória; `addTransaction`, `addTransactions`, `removeTransaction` |
-| **Orçamentos** | Limites mensais; `addBudget`, `updateBudget`, `removeBudget` |
-| **Status de orçamento** | `budgetStatusFor(month)` — calcula gasto, restante, % e flag `exceeded` |
-
-### Escopos de orçamento
-
-- `global` — todas as despesas do mês
-- `category` — por setor/categoria
-- `method` — por forma de pagamento
-- `bank` — por instituição financeira
-
-### Chaves de persistência (localStorage)
-
-```text
-finlumia-custom-categories
-finlumia-custom-banks
-finlumia-custom-methods
-finlumia-budgets
-finlumia-transactions
-```
-
-### Uso em componentes
-
-```tsx
-import { useFinance } from "@/shared/finance/finance.context";
-
-const { categories, addTransaction, budgetStatusFor } = useFinance();
-```
-
-O hook lança erro se usado fora de `FinanceProvider` (montado em `dashboard/layout.tsx`).
-
----
-
-## Navegação (Sidebar)
-
-A estrutura do menu é **declarativa** em `src/config/navigation.json`:
-
-```json
-{
-  "sidebar": {
-    "version": "1.1.0",
-    "groups": [
-      { "id": "main", "items": [ /* Painel */ ] },
-      { "id": "management", "items": [ /* Configurador, Movimentações, Relatórios */ ] },
-      { "id": "help", "items": [ /* Suporte */ ] }
-    ]
-  }
-}
-```
-
-Cada item suporta: `id`, `label`, `icon`, `href`, `exact`, `children` (submenus).
-
-O componente `Sidebar` (`src/components/organisms/Sidebar/Sidebar.tsx`):
-
-- Lê `navigation.json` e mapeia ícones SVG inline.
-- Suporta **colapso** no desktop (icon rail) e **drawer off-canvas** no mobile/tablet.
-- Botão **Sair** redireciona para `/` (landing).
-- Estado controlado pelo `dashboard/layout.tsx` (`collapsed`, `mobileOpen`).
-
----
-
-## Integração com backend
-
-### Catálogo de endpoints
-
-`src/api/Endpoints.ts` monta URLs no formato:
-
-```text
-{base_do_servico}/{versao}{caminho}
-```
-
-| Domínio | Serviço | Pasta em `services/` |
-|---------|---------|----------------------|
-| Autenticação / perfil | identification | `identification/` |
-| Transações / importação | movimentation | `movimentation/` |
-| Relatórios / documentos | document | `document/` |
-| Metadados admin | configurator | `configurator/` |
-
-Contratos OpenAPI-like em `src/api/endpoints/*.endpoints.json`. Tipos TypeScript gerados/derivados em `src/api/types.ts`.
-
-### Ambientes
-
-Controlados por `NEXT_PUBLIC_APP_ENV`: `local` | `homologation` | `production`.
-
-Cada serviço possui variável `NEXT_PUBLIC_SERVICE_*_{ENV}` (ver `.env.example`).
-
-> **Nota:** A camada `services/` está preparada (pastas com `.gitkeep`); as telas atuais usam mocks e `FinanceProvider` até a API estar disponível.
-
----
-
-## Responsividade
-
-Breakpoints principais:
-
-| Viewport | Comportamento |
-|----------|---------------|
-| `< 640px` | Mobile — sidebar em drawer, topbar fixa, grids empilhados |
-| `640px – 1023px` | Tablet — mesmo drawer, mais padding |
-| `≥ 1024px` | Desktop — sidebar persistente, conteúdo com offset `--sidebar-width` |
-
-### Centralização do conteúdo
-
-O conteúdo das telas do dashboard fica **centralizado na área útil** (espaço à direita da sidebar):
-
-1. `.mainInner` no `dashboard/layout.tsx` — `max-width: 140rem`, `margin-inline: auto`
-2. `.page-responsive` — `max-width` (padrão `120rem`) + `margin-inline: auto` em cada página
-
-Isso evita que cards e tabelas fiquem colados à esquerda em monitores ultrawide.
-
----
-
-## Pré-requisitos
-
-Escolha **uma** forma de desenvolvimento:
-
-| Modo | Requisitos |
-|------|------------|
-| **Local** | Node.js 20+ (recomendado 24 LTS), npm |
-| **Docker** | Docker Desktop, PowerShell |
-| **Dev Container** | Docker Desktop + Cursor/VS Code com extensão Dev Containers |
-
----
-
-## Como executar
-
-### Local (Node.js)
-
-```bash
-npm install
-cp .env.example .env.local   # Windows: copy .env.example .env.local
-npm run dev
-```
-
-Abra [http://localhost:3000](http://localhost:3000).
-
-### Docker — Windows (`finlumia.ps1`)
-
-```powershell
-./finlumia.ps1 -up              # Sobe container + dev server
-./finlumia.ps1 -up -Build       # Rebuild da imagem
-./finlumia.ps1 -Logs            # Logs
-./finlumia.ps1 -Shell           # Shell no container
-./finlumia.ps1 -down            # Para e remove
-```
-
-### Docker — Linux / VPS (`finlumia.sh`)
-
-```bash
-chmod +x finlumia.sh
-./finlumia.sh -up              # install (com devDeps) → build → start (produção)
-./finlumia.sh -up -Build       # Rebuild da imagem Docker
-./finlumia.sh -Logs            # Logs (build pode levar alguns minutos)
-./finlumia.sh -Shell           # Shell no container
-./finlumia.sh -down            # Para e remove
-```
-
-Configure `.env.local` antes do primeiro `-up` (variáveis `NEXT_PUBLIC_*` entram no build). O container usa `--restart unless-stopped`.
-
-Repositório montado em `/workspace` no container. App em [http://localhost:3000](http://localhost:3000).
-
-### Dev Container
-
-1. Abra o repositório no Cursor/VS Code.
-2. **Dev Containers: Reopen in Container**.
-3. No terminal integrado:
-
-```bash
-npm run dev -- --hostname 0.0.0.0 --port 3000
-```
-
-### Build de produção
-
-```bash
-npm run build
-npm run start
+├── tsconfig.json
+└── package.json
 ```
 
 ---
 
-## Variáveis de ambiente
+## Microserviços e endpoints
 
-Copie `.env.example` → `.env.local`:
+O frontend consome 4 microserviços Spring Boot. As URLs são selecionadas automaticamente em `src/api/Endpoints.ts` com base em `NEXT_PUBLIC_APP_ENV`.
 
-| Variável | Descrição |
-|----------|-----------|
-| `NEXT_PUBLIC_APP_ENV` | `local`, `homologation` ou `production` |
-| `NEXT_PUBLIC_API_VERSION` | Versão da API (ex.: `v1`) |
-| `NEXT_PUBLIC_SERVICE_*_LOCAL` | URL base de cada microserviço (dev) |
-| `NEXT_PUBLIC_SERVICE_*_HOMOLOGATION` | URL em homologação |
-| `NEXT_PUBLIC_SERVICE_*_PRODUCTION` | URL em produção |
-| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | OAuth Google (cadastro/login social) |
-| `NEXT_PUBLIC_FEATURE_IMPORT_ENABLED` | Feature flag de importação |
-| `NEXT_PUBLIC_FEATURE_MFA_ENABLED` | Feature flag de MFA |
+| Microserviço | Variável de ambiente | Responsabilidade |
+|--------------|----------------------|------------------|
+| **identification** | `NEXT_PUBLIC_SERVICE_IDENTIFICATION_*` | Login, cadastro, tokens JWT, perfil |
+| **movimentation** | `NEXT_PUBLIC_SERVICE_MOVIMENTATION_*` | Transações, categorias, bancos, importação |
+| **document** | `NEXT_PUBLIC_SERVICE_DOCUMENT_*` | Relatórios, gráficos, exportação |
+| **configurator** | `NEXT_PUBLIC_SERVICE_CONFIGURATOR_*` | Metadados: tabelas, campos, usuários, permissões |
 
-Somente variáveis `NEXT_PUBLIC_*` são expostas ao browser.
+### Cliente HTTP (`src/lib/http-client.ts`)
 
----
+Todas as chamadas passam pelo wrapper centralizado que:
+- Injeta `Authorization: Bearer <token>` automaticamente
+- Detecta `401` e tenta refresh antes de retentar
+- Suporta `{ skipAuth: true }` para endpoints públicos (ex.: categorias)
 
-## Scripts npm
+```ts
+import { http } from "@/lib/http-client";
 
-| Comando | Descrição |
-|---------|-----------|
-| `npm run dev` | Servidor de desenvolvimento (porta 3000) |
-| `npm run build` | Build de produção |
-| `npm run start` | Servidor após build |
-| `npm run lint` | ESLint |
+// Endpoint autenticado
+const data = await http.get<Transaction[]>("/transactions");
 
-### Typecheck (sem script dedicado)
-
-```bash
-node ./node_modules/typescript/bin/tsc --noEmit
+// Endpoint público
+const cats = await http.get<Category[]>("/categories", { skipAuth: true });
 ```
 
 ---
 
-## Docker e Dev Container
-
-| Recurso | Caminho |
-|---------|---------|
-| Dockerfile | `docker/scripts/finlumia_front.Dockerfile` |
-| Dev Container | `.devcontainer/devcontainer.json` |
-| Script PowerShell (dev) | `finlumia.ps1` |
-| Script Bash (VPS/prod) | `finlumia.sh` |
-
-Imagem: AlmaLinux 10, Node.js 24, Git, gcc-c++, python3, Docker CLI.
-
----
-
-## Convenções de desenvolvimento
+## Guia de desenvolvimento
 
 ### Adicionar uma rota
 
 ```text
-src/app/minha-rota/page.tsx  →  /minha-rota
+src/app/minha-rota/page.tsx  →  acessível em /minha-rota
 ```
 
 ```tsx
+// src/app/dashboard/minha-rota/page.tsx
 import { MinhaPage } from "@/components/pages/MinhaPage";
 
-export const metadata = {
-  title: "Minha rota | Finlumia",
-  description: "...",
-};
+export const metadata = { title: "Minha rota | Finlumia" };
 
 export default function Page() {
   return <MinhaPage />;
@@ -537,42 +401,125 @@ export default function Page() {
 
 Use `"use client"` quando a page ou componente usar hooks, eventos ou contexto.
 
-### Adicionar item ao menu
+### Adicionar item ao menu lateral
 
-1. Edite `src/config/navigation.json` (item ou `children`).
+1. Edite `src/config/navigation.json` — adicione o item ou `children`.
 2. Se o ícone for novo, registre-o no mapa `ICONS` em `Sidebar.tsx`.
 
-### Adicionar componente (Atomic Design)
+### Criar um componente (Atomic Design)
 
-1. Crie a pasta em `atoms/`, `molecules/` ou `organisms/`.
-2. Exporte via `index.ts`.
-3. Consuma em `components/pages/` — não importe atoms diretamente em `app/` quando possível.
+| Onde colocar | Critério |
+|--------------|----------|
+| `atoms/` | Primitivo visual sem lógica de negócio (ex.: botão, campo) |
+| `molecules/` | Composição de 2–3 atoms (ex.: campo com label) |
+| `organisms/` | Seção complexa com estado ou contexto (ex.: modal, tabela) |
+| `pages/` | Tela completa composta de organisms |
+
+```text
+src/components/atoms/MeuComponente/
+  ├── MeuComponente.tsx
+  └── index.ts          ← re-exporta para import limpo
+```
 
 ### Estilos
 
-- **CSS Modules** (`.module.css`) para layout e estados de componentes.
-- **Inline `style`** com tokens de `getFoundationByTheme(theme)` para cores dinâmicas.
-- **Classes globais** (`.page-responsive`, `.grid-responsive`) para padrões repetidos.
+- **CSS Modules** (`.module.css`) — layout e estados de componente
+- **Inline `style`** com `getFoundationByTheme(theme)` — cores dinâmicas por tema
+- **Classes globais** — `.page-responsive`, `.grid-responsive` para padrões repetidos
 
-### Commits e PRs
+```tsx
+import { useTheme } from "@/shared/styles/theme.context";
+import { getFoundationByTheme } from "@/shared/styles/tokens";
 
-- Mensagens claras focadas no *porquê*.
-- PRs pequenos e revisáveis por módulo (UI, rotas, config).
-- Não commitar `.env.local` nem segredos.
+const { theme } = useTheme();
+const f = getFoundationByTheme(theme);  // tokens de cor do tema atual
+```
+
+### Typecheck manual
+
+```bash
+node ./node_modules/typescript/bin/tsc --noEmit
+```
+
+### Convenções de commit
+
+```
+feat: adiciona importação via OCR
+fix: corrige cálculo de taxa de poupança
+refactor: extrai lógica de refresh para http-client
+```
+
+- Mensagens em português, foco no **porquê**
+- PRs por módulo (UI, rota, serviço) — não misturar domínios
+- Nunca commitar `.env.local` nem tokens/senhas
 
 ---
 
-## Documentação complementar
+## Variáveis de ambiente — referência completa
 
-| Documento | Conteúdo |
-|-----------|----------|
-| [src/ARCHITECTURE.md](src/ARCHITECTURE.md) | Regras de arquitetura detalhadas |
-| [docs/header-maintenance-guide.md](docs/header-maintenance-guide.md) | Manutenção do Header |
-| [docs/atoms-and-hero-maintenance-guide.md](docs/atoms-and-hero-maintenance-guide.md) | Atoms e HeroSection |
-| [workspace/README.md](workspace/README.md) | Mount host → `/workspace` no container |
+| Variável | Valores | Descrição |
+|----------|---------|-----------|
+| `NEXT_PUBLIC_APP_ENV` | `local` \| `homologation` \| `production` | Seleciona o conjunto de URLs ativo |
+| `NEXT_PUBLIC_API_VERSION` | `v1` | Prefixo de versão nos paths da API |
+| `NEXT_PUBLIC_SERVICE_IDENTIFICATION_*` | URL | Base do serviço de autenticação |
+| `NEXT_PUBLIC_SERVICE_MOVIMENTATION_*` | URL | Base do serviço de transações |
+| `NEXT_PUBLIC_SERVICE_DOCUMENT_*` | URL | Base do serviço de relatórios |
+| `NEXT_PUBLIC_SERVICE_CONFIGURATOR_*` | URL | Base do serviço de configuração |
+| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | string | Client ID para OAuth Google |
+| `NEXT_PUBLIC_FEATURE_IMPORT_ENABLED` | `true` \| `false` | Feature flag de importação de extratos |
+| `NEXT_PUBLIC_FEATURE_MFA_ENABLED` | `true` \| `false` | Feature flag de autenticação MFA |
+
+O sufixo `*` substitui o ambiente: `_LOCAL`, `_HOMOLOGATION` ou `_PRODUCTION`.
 
 ---
 
-## Licença
+## Docker — referência da imagem
 
-Projeto privado (`"private": true` em `package.json`).
+| Item | Detalhe |
+|------|---------|
+| Base | `almalinux:10.1-minimal` |
+| Runtime | Node.js 24 LTS (via NodeSource) |
+| Extras | Git, Python 3, GCC (para módulos nativos npm), Docker CLI |
+| Usuário | `finlumia` (não-root) |
+| Workdir | `/workspace` (repositório montado como volume) |
+| Porta exposta | `3000` |
+| Dockerfile | `docker/scripts/finlumia_front.Dockerfile` |
+
+---
+
+## Rotas da aplicação
+
+### Públicas (sem autenticação)
+
+| Rota | Tela |
+|------|------|
+| `/` | Landing page — hero, recursos, FAQ, CTA |
+| `/login` | Autenticação e-mail + senha |
+| `/register` | Cadastro com validação e aceite de termos |
+| `/forgot-password` | Solicitação de redefinição de senha |
+| `/reset-password` | Redefinição com token |
+
+### Dashboard (`/dashboard/*`)
+
+| Rota | Módulo |
+|------|--------|
+| `/dashboard` | Painel — KPIs e movimentações recentes |
+| `/dashboard/movimentation/transactions` | Transações — CRUD + importação de extrato |
+| `/dashboard/movimentation/budget` | Orçamentos mensais com alertas de estouro |
+| `/dashboard/movimentation/categories` | Catálogo de categorias |
+| `/dashboard/movimentation/banks` | Catálogo de bancos |
+| `/dashboard/movimentation/payment-methods` | Formas de pagamento |
+| `/dashboard/reports` | Relatórios — gráficos, insights e evolução |
+| `/dashboard/configurator/tables` | Metadados — tabelas |
+| `/dashboard/configurator/fields` | Metadados — campos |
+| `/dashboard/configurator/users` | Metadados — usuários |
+| `/dashboard/configurator/permissions` | Metadados — permissões |
+| `/dashboard/configurator/functions` | Metadados — funções |
+| `/dashboard/configurator/indexes` | Metadados — índices |
+| `/dashboard/configurator/triggers` | Metadados — triggers |
+| `/dashboard/support/ticket` | Abertura de chamado |
+| `/dashboard/support/documentation` | Documentação interna |
+
+---
+
+*Projeto privado — `"private": true` em `package.json`.*

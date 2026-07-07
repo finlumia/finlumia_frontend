@@ -1,43 +1,26 @@
 "use client";
 
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Modal } from "../Modal";
 import { Button } from "../../atoms/button";
 import { Input } from "../../atoms/input";
 import {
     INSTITUTIONS, CATEGORIES, PAYMENT_METHODS,
-    type Transaction, type InstitutionId, type CategoryId, type PaymentMethod,
+    type InstitutionId, type CategoryId, type PaymentMethod,
 } from "../../../config/transactions";
 import { getFoundationByTheme } from "../../../shared/styles/tokens";
+import { resolveCategoryColor } from "../../../config/categoryPalette";
 import type { ThemeMode } from "../../../shared/styles/theme.types";
+import { importService } from "../../../services/movimentation/movement.service";
+import { parseMoney, maskCurrencyInput } from "../../../lib/money";
+import type { OcrPreviewResult } from "../../../api/types";
 
-type ImportStep = "upload" | "processing" | "review" | "done";
-
-type OcrResult = {
-    description: string;
-    amount: string;
-    date: string;
-    category: CategoryId;
-    method: PaymentMethod;
-};
-
-const MOCK_OCR: OcrResult = {
-    description: "Extrato identificado via imagem",
-    amount: "1.234,56",
-    date: new Date().toISOString().slice(0, 10),
-    category: "outros",
-    method: "pix",
-};
-
-type UploadedFile = {
-    file: File;
-    isImage: boolean;
-};
+type ImportStep = "upload" | "processing" | "review" | "done" | "error";
 
 type ImportModalProps = {
     open: boolean;
     onClose: () => void;
-    onImport: (transactions: Omit<Transaction, "id">[]) => void;
+    onSuccess: () => void | Promise<void>;
     theme?: ThemeMode;
 };
 
@@ -47,16 +30,22 @@ function fileIsImage(file: File) {
     return file.type.startsWith("image/") || file.name.toLowerCase().endsWith(".pdf");
 }
 
-export function ImportModal({ open, onClose, onImport, theme = "dark" }: ImportModalProps) {
+export function ImportModal({ open, onClose, onSuccess, theme = "dark" }: ImportModalProps) {
     const f = getFoundationByTheme(theme);
     const isDark = theme === "dark";
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const [step, setStep] = useState<ImportStep>("upload");
     const [selectedInstitution, setSelectedInstitution] = useState<InstitutionId | "">("");
-    const [uploadedFile, setUploadedFile] = useState<UploadedFile | null>(null);
+    const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+    const [isImage, setIsImage] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
-    const [ocr, setOcr] = useState<OcrResult>(MOCK_OCR);
+    const [jobId, setJobId] = useState("");
+    const [errorMsg, setErrorMsg] = useState("");
+
+    // OCR review state
+    const [ocrData, setOcrData] = useState({ description: "", amount: "", date: "" });
     const [ocrCategory, setOcrCategory] = useState<CategoryId>("outros");
     const [ocrMethod, setOcrMethod] = useState<PaymentMethod>("pix");
 
@@ -73,31 +62,72 @@ export function ImportModal({ open, onClose, onImport, theme = "dark" }: ImportM
         fontFamily: f.typography.fontFamily.base,
         background: "none",
     };
-
     const inactiveChipStyle: React.CSSProperties = { ...chipBase, borderColor: border, color: muted };
     const activeChipStyle = (color: string): React.CSSProperties => ({
-        ...chipBase,
-        backgroundColor: isDark ? `${color}22` : `${color}15`,
-        borderColor: color,
-        color,
+        ...chipBase, backgroundColor: isDark ? `${color}22` : `${color}15`, borderColor: color, color,
     });
 
-    const handleFile = useCallback((file: File) => {
+    const stopPolling = useCallback(() => {
+        if (pollingRef.current) {
+            clearInterval(pollingRef.current);
+            pollingRef.current = null;
+        }
+    }, []);
+
+    // Poll job status
+    useEffect(() => {
+        if (step !== "processing" || !jobId) return;
+
+        pollingRef.current = setInterval(async () => {
+            try {
+                const status = await importService.getJobStatus(jobId);
+
+                if (status.status === "failed") {
+                    stopPolling();
+                    setErrorMsg("O processamento do arquivo falhou. Tente novamente.");
+                    setStep("error");
+                    return;
+                }
+
+                if (status.status === "completed" || status.status === "ready") {
+                    stopPolling();
+                    if (isImage) {
+                        // OCR flow: populate review fields
+                        const ocr = status as unknown as OcrPreviewResult;
+                        if (ocr.extracted) {
+                            setOcrData({
+                                description: ocr.extracted.description,
+                                amount: String(ocr.extracted.amount),
+                                date: ocr.extracted.date,
+                            });
+                            setOcrCategory(ocr.extracted.category);
+                            setOcrMethod(ocr.extracted.method);
+                        }
+                        setStep("review");
+                    } else {
+                        // File import flow: auto-confirm
+                        await importService.confirmFileImport(jobId);
+                        await onSuccess();
+                        setStep("done");
+                    }
+                }
+            } catch {
+                stopPolling();
+                setErrorMsg("Erro ao verificar status da importação.");
+                setStep("error");
+            }
+        }, 2000);
+
+        return () => stopPolling();
+    }, [step, jobId, isImage, onSuccess, stopPolling]);
+
+    const handleFile = useCallback(async (file: File) => {
         const ext = "." + file.name.split(".").pop()?.toLowerCase();
         if (!ALL_ACCEPTED.includes(ext)) return;
 
         const img = fileIsImage(file);
-        setUploadedFile({ file, isImage: img });
-
-        if (img) {
-            setStep("processing");
-            setTimeout(() => {
-                setOcr(MOCK_OCR);
-                setOcrCategory(MOCK_OCR.category);
-                setOcrMethod(MOCK_OCR.method);
-                setStep("review");
-            }, 2200);
-        }
+        setUploadedFile(file);
+        setIsImage(img);
     }, []);
 
     const onDrop = useCallback((e: React.DragEvent) => {
@@ -108,76 +138,93 @@ export function ImportModal({ open, onClose, onImport, theme = "dark" }: ImportM
     }, [handleFile]);
 
     const handleClose = () => {
+        stopPolling();
         setStep("upload");
         setUploadedFile(null);
         setSelectedInstitution("");
         setIsDragging(false);
+        setJobId("");
+        setErrorMsg("");
         onClose();
     };
 
-    const handleConfirmOcr = () => {
-        const raw = ocr.amount.replace(/\./g, "").replace(",", ".");
-        const amt = parseFloat(raw);
-        onImport([{
-            type: "despesa",
-            method: ocrMethod,
-            institution: (selectedInstitution || "nubank") as InstitutionId,
-            date: ocr.date,
-            category: ocrCategory,
-            description: ocr.description,
-            amount: isNaN(amt) ? 0 : amt,
-        }]);
-        setStep("done");
+    const handleUpload = async () => {
+        if (!uploadedFile) return;
+        setStep("processing");
+        try {
+            const res = await importService.upload(uploadedFile);
+            setJobId(res.jobId);
+        } catch (err: unknown) {
+            setErrorMsg((err as { message?: string })?.message ?? "Falha ao enviar o arquivo.");
+            setStep("error");
+        }
     };
 
-    const handleImportFile = () => {
-        onImport([]);
-        setStep("done");
+    const handleConfirmOcr = async () => {
+        try {
+            const parsedAmount = parseMoney(ocrData.amount);
+            await importService.confirmOcr(jobId, {
+                description: ocrData.description,
+                amount: isNaN(parsedAmount) ? 0 : parsedAmount,
+                date: ocrData.date,
+                category: ocrCategory,
+                method: ocrMethod,
+                institution: (selectedInstitution || undefined) as InstitutionId | undefined,
+            });
+            await onSuccess();
+            setStep("done");
+        } catch (err: unknown) {
+            setErrorMsg((err as { message?: string })?.message ?? "Erro ao confirmar importação.");
+            setStep("error");
+        }
     };
 
     // ── Footer by step ──────────────────────────────────────────────
-    const renderFooter = () => {
-        const cancelBtn = (label: string, onClick: () => void) => (
-            <button type="button" onClick={onClick} style={{
-                background: "none", border: "none", color: muted,
-                fontSize: "1.4rem", cursor: "pointer",
-                fontFamily: "inherit", padding: "0 1.2rem",
-            }}>{label}</button>
-        );
+    const cancelStyle: React.CSSProperties = {
+        background: "none", border: "none", color: muted,
+        fontSize: "1.4rem", cursor: "pointer",
+        fontFamily: "inherit", padding: "0 1.2rem",
+    };
 
-        if (step === "upload") {
-            const canImport = !!uploadedFile && !uploadedFile.isImage;
-            return (
-                <>
-                    {cancelBtn("Cancelar", handleClose)}
-                    <Button label="Importar Dados" type="button" theme={theme} variant="primary" size="md"
-                        disabled={!canImport} onClick={handleImportFile}
-                        styleConfig={{ backgroudColor: primary, textColor: "#fff", border: "none", borderRadius: "0.8rem", padding: "0 2.4rem" }}
-                    />
-                </>
-            );
-        }
-        if (step === "review") {
-            return (
-                <>
-                    {cancelBtn("← Refazer", () => { setStep("upload"); setUploadedFile(null); })}
-                    <Button label="Confirmar e Importar" type="button" theme={theme} variant="primary" size="md"
-                        onClick={handleConfirmOcr}
-                        styleConfig={{ backgroudColor: f.colors.feedback.success, textColor: "#fff", border: "none", borderRadius: "0.8rem", padding: "0 2.4rem" }}
-                    />
-                </>
-            );
-        }
-        if (step === "done") {
-            return (
-                <Button label="Fechar" type="button" theme={theme} variant="primary" size="md"
-                    onClick={handleClose}
+    let footer: React.ReactNode = null;
+    if (step === "upload") {
+        footer = (
+            <>
+                <button type="button" onClick={handleClose} style={cancelStyle}>Cancelar</button>
+                <Button label={isImage ? "Processar imagem" : "Importar dados"} type="button" theme={theme} variant="primary" size="md"
+                    disabled={!uploadedFile} onClick={handleUpload}
                     styleConfig={{ backgroudColor: primary, textColor: "#fff", border: "none", borderRadius: "0.8rem", padding: "0 2.4rem" }}
                 />
-            );
-        }
-        return null;
-    };
+            </>
+        );
+    } else if (step === "review") {
+        footer = (
+            <>
+                <button type="button" onClick={() => { setStep("upload"); setUploadedFile(null); }} style={cancelStyle}>← Refazer</button>
+                <Button label="Confirmar e importar" type="button" theme={theme} variant="primary" size="md"
+                    onClick={handleConfirmOcr}
+                    styleConfig={{ backgroudColor: f.colors.feedback.success, textColor: "#fff", border: "none", borderRadius: "0.8rem", padding: "0 2.4rem" }}
+                />
+            </>
+        );
+    } else if (step === "error") {
+        footer = (
+            <>
+                <button type="button" onClick={handleClose} style={cancelStyle}>Fechar</button>
+                <Button label="Tentar novamente" type="button" theme={theme} variant="primary" size="md"
+                    onClick={() => { setStep("upload"); setUploadedFile(null); setErrorMsg(""); }}
+                    styleConfig={{ backgroudColor: primary, textColor: "#fff", border: "none", borderRadius: "0.8rem", padding: "0 2.4rem" }}
+                />
+            </>
+        );
+    } else if (step === "done") {
+        footer = (
+            <Button label="Fechar" type="button" theme={theme} variant="primary" size="md"
+                onClick={handleClose}
+                styleConfig={{ backgroudColor: primary, textColor: "#fff", border: "none", borderRadius: "0.8rem", padding: "0 2.4rem" }}
+            />
+        );
+    }
 
     return (
         <Modal
@@ -187,12 +234,11 @@ export function ImportModal({ open, onClose, onImport, theme = "dark" }: ImportM
             subtitle="Sistema de Importação"
             size="md"
             theme={theme}
-            footer={renderFooter() ?? undefined}
+            footer={footer ?? undefined}
         >
             {/* ── STEP: upload ─────────────────────────────────────── */}
             {step === "upload" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
-
                     {/* Institution selector */}
                     <div>
                         <label style={{ display: "block", fontSize: "1.3rem", fontWeight: 500, color: f.colors.text.secondary, marginBottom: "1rem" }}>
@@ -220,14 +266,6 @@ export function ImportModal({ open, onClose, onImport, theme = "dark" }: ImportM
                                     </button>
                                 );
                             })}
-                            <button type="button" title="Outra instituição"
-                                style={{
-                                    width: "4rem", height: "4rem", borderRadius: "0.8rem",
-                                    border: `2px dashed ${border}`, backgroundColor: "transparent",
-                                    color: muted, fontSize: "1.8rem", cursor: "pointer",
-                                    display: "flex", alignItems: "center", justifyContent: "center",
-                                }}
-                            >+</button>
                         </div>
                     </div>
 
@@ -254,7 +292,6 @@ export function ImportModal({ open, onClose, onImport, theme = "dark" }: ImportM
                             style={{ display: "none" }}
                             onChange={(e) => { const fi = e.target.files?.[0]; if (fi) handleFile(fi); }}
                         />
-
                         <div style={{ color: primary, marginBottom: "1.2rem" }}>
                             <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ display: "inline-block" }}>
                                 <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
@@ -263,13 +300,11 @@ export function ImportModal({ open, onClose, onImport, theme = "dark" }: ImportM
                                 <line x1="9" y1="15" x2="15" y2="15" />
                             </svg>
                         </div>
-
                         <p style={{ fontSize: "1.4rem", color: f.colors.text.secondary, marginBottom: "0.4rem" }}>
                             Arraste o arquivo OFX, CSV ou imagem aqui
                         </p>
                         <p style={{ fontSize: "1.3rem", color: muted }}>
-                            ou{" "}
-                            <span style={{ color: primary, fontWeight: 600 }}>clique para selecionar</span>
+                            ou <span style={{ color: primary, fontWeight: 600 }}>clique para selecionar</span>
                         </p>
                         <div style={{ display: "flex", justifyContent: "center", gap: "0.6rem", marginTop: "1.2rem", flexWrap: "wrap" }}>
                             {[".OFX", ".CSV", ".PNG/.JPG"].map((ext) => (
@@ -282,11 +317,6 @@ export function ImportModal({ open, onClose, onImport, theme = "dark" }: ImportM
                         </div>
                     </div>
 
-                    <p style={{ fontSize: "1.2rem", color: muted, textAlign: "center", marginTop: "-1rem" }}>
-                        Tamanho máximo do arquivo: 10MB
-                    </p>
-
-                    {/* Uploaded file row */}
                     {uploadedFile && (
                         <div style={{
                             display: "flex", alignItems: "center", gap: "1.2rem",
@@ -295,26 +325,17 @@ export function ImportModal({ open, onClose, onImport, theme = "dark" }: ImportM
                             backgroundColor: isDark ? f.colors.bg.surface : f.colors.bg.app,
                         }}>
                             <span style={{ color: primary, flexShrink: 0 }}>
-                                {uploadedFile.isImage ? (
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                        <rect width="18" height="18" x="3" y="3" rx="2" /><circle cx="9" cy="9" r="2" />
-                                        <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-                                    </svg>
-                                ) : (
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                        <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
-                                        <polyline points="14 2 14 8 20 8" />
-                                    </svg>
-                                )}
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+                                    <polyline points="14 2 14 8 20 8" />
+                                </svg>
                             </span>
                             <div style={{ flex: 1 }}>
-                                <div style={{ fontSize: "1.3rem", fontWeight: 600, color: f.colors.text.primary }}>
-                                    {uploadedFile.file.name}
-                                </div>
+                                <div style={{ fontSize: "1.3rem", fontWeight: 600, color: f.colors.text.primary }}>{uploadedFile.name}</div>
                                 <div style={{ fontSize: "1.1rem", color: muted }}>
-                                    {(uploadedFile.file.size / 1024).toFixed(1)} KB •{" "}
-                                    <span style={{ color: uploadedFile.isImage ? f.colors.feedback.warning : f.colors.feedback.success }}>
-                                        {uploadedFile.isImage ? "Processamento OCR ativado" : "Pronto para importar"}
+                                    {(uploadedFile.size / 1024).toFixed(1)} KB •{" "}
+                                    <span style={{ color: isImage ? f.colors.feedback.warning : f.colors.feedback.success }}>
+                                        {isImage ? "Processamento OCR ativado" : "Pronto para importar"}
                                     </span>
                                 </div>
                             </div>
@@ -330,7 +351,6 @@ export function ImportModal({ open, onClose, onImport, theme = "dark" }: ImportM
                         </div>
                     )}
 
-                    {/* Info: image flow */}
                     {!uploadedFile && (
                         <div style={{
                             display: "flex", alignItems: "flex-start", gap: "0.8rem",
@@ -361,27 +381,17 @@ export function ImportModal({ open, onClose, onImport, theme = "dark" }: ImportM
                         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
                     </div>
                     <h3 style={{ fontSize: "1.8rem", fontWeight: 700, color: f.colors.text.primary, marginBottom: "0.8rem" }}>
-                        Identificando dados da imagem...
+                        {isImage ? "Identificando dados da imagem..." : "Processando arquivo..."}
                     </h3>
                     <p style={{ fontSize: "1.4rem", color: muted, lineHeight: 1.6 }}>
-                        Estamos lendo as informações do extrato.
-                        <br />Isso leva apenas alguns segundos.
+                        {isImage ? "Estamos lendo as informações do extrato." : "Analisando e importando as transações."}<br />Isso leva apenas alguns segundos.
                     </p>
-                    <div style={{ marginTop: "2rem", display: "flex", flexDirection: "column", gap: "0.6rem", alignItems: "flex-start", maxWidth: "28rem", margin: "2rem auto 0" }}>
-                        {["Analisando estrutura do documento...", "Extraindo campos: data, valor, descrição...", "Identificando categoria..."].map((msg, i) => (
-                            <div key={i} style={{ display: "flex", alignItems: "center", gap: "0.8rem", fontSize: "1.2rem", color: muted }}>
-                                <div style={{ width: "0.6rem", height: "0.6rem", borderRadius: "50%", backgroundColor: primary, flexShrink: 0 }} />
-                                {msg}
-                            </div>
-                        ))}
-                    </div>
                 </div>
             )}
 
-            {/* ── STEP: review ─────────────────────────────────────── */}
+            {/* ── STEP: review (OCR) ───────────────────────────────── */}
             {step === "review" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "1.6rem" }}>
-                    {/* Warning banner */}
                     <div style={{
                         display: "flex", alignItems: "flex-start", gap: "1rem",
                         padding: "1.2rem 1.4rem", borderRadius: "0.8rem",
@@ -405,59 +415,41 @@ export function ImportModal({ open, onClose, onImport, theme = "dark" }: ImportM
                     </div>
 
                     <Input id="ocr-description" name="description" label="Descrição identificada"
-                        type="text" value={ocr.description} theme={theme}
-                        onChange={(e) => setOcr((p) => ({ ...p, description: e.target.value }))}
+                        type="text" value={ocrData.description} theme={theme}
+                        onChange={(e) => setOcrData((p) => ({ ...p, description: e.target.value }))}
                     />
-
                     <div className="grid-pair" style={{ gap: "1.2rem" }}>
                         <Input id="ocr-amount" name="amount" label="Valor (R$)"
-                            type="text" value={ocr.amount} theme={theme}
-                            onChange={(e) => setOcr((p) => ({ ...p, amount: e.target.value }))}
+                            type="text" inputMode="decimal" value={ocrData.amount} theme={theme}
+                            onChange={(e) => setOcrData((p) => ({ ...p, amount: maskCurrencyInput(e.target.value) }))}
                         />
                         <Input id="ocr-date" name="date" label="Data"
-                            type="text" value={ocr.date} theme={theme}
-                            onChange={(e) => setOcr((p) => ({ ...p, date: e.target.value }))}
+                            type="date" value={ocrData.date} theme={theme}
+                            onChange={(e) => setOcrData((p) => ({ ...p, date: e.target.value }))}
                         />
                     </div>
 
                     <div>
-                        <label style={{ display: "block", fontSize: "1.3rem", fontWeight: 500, color: f.colors.text.secondary, marginBottom: "0.8rem" }}>
-                            Categoria
-                        </label>
+                        <label style={{ display: "block", fontSize: "1.3rem", fontWeight: 500, color: f.colors.text.secondary, marginBottom: "0.8rem" }}>Categoria</label>
                         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
-                            {CATEGORIES.map((cat) => {
-                                const isActive = ocrCategory === cat.id;
-                                return (
-                                    <button key={cat.id} type="button"
-                                        onClick={() => setOcrCategory(cat.id)}
-                                        style={isActive
-                                            ? activeChipStyle(cat.color)
-                                            : inactiveChipStyle
-                                        }
-                                    >
-                                        {cat.label}
-                                    </button>
-                                );
-                            })}
+                            {CATEGORIES.map((cat) => (
+                                <button key={cat.id} type="button" onClick={() => setOcrCategory(cat.id)}
+                                    style={ocrCategory === cat.id ? activeChipStyle(resolveCategoryColor(cat.id, theme, cat.color).fg) : inactiveChipStyle}>
+                                    {cat.label}
+                                </button>
+                            ))}
                         </div>
                     </div>
 
                     <div>
-                        <label style={{ display: "block", fontSize: "1.3rem", fontWeight: 500, color: f.colors.text.secondary, marginBottom: "0.8rem" }}>
-                            Método de pagamento
-                        </label>
+                        <label style={{ display: "block", fontSize: "1.3rem", fontWeight: 500, color: f.colors.text.secondary, marginBottom: "0.8rem" }}>Método de pagamento</label>
                         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
-                            {PAYMENT_METHODS.map((m) => {
-                                const isActive = ocrMethod === m.id;
-                                return (
-                                    <button key={m.id} type="button"
-                                        onClick={() => setOcrMethod(m.id)}
-                                        style={isActive ? activeChipStyle(primary) : inactiveChipStyle}
-                                    >
-                                        {m.label}
-                                    </button>
-                                );
-                            })}
+                            {PAYMENT_METHODS.map((m) => (
+                                <button key={m.id} type="button" onClick={() => setOcrMethod(m.id)}
+                                    style={ocrMethod === m.id ? activeChipStyle(primary) : inactiveChipStyle}>
+                                    {m.label}
+                                </button>
+                            ))}
                         </div>
                     </div>
                 </div>
@@ -484,6 +476,28 @@ export function ImportModal({ open, onClose, onImport, theme = "dark" }: ImportM
                     <p style={{ fontSize: "1.4rem", color: muted }}>
                         Os dados foram importados com sucesso para suas movimentações.
                     </p>
+                </div>
+            )}
+
+            {/* ── STEP: error ──────────────────────────────────────── */}
+            {step === "error" && (
+                <div style={{ textAlign: "center", padding: "3.2rem 0" }}>
+                    <div style={{
+                        width: "6.4rem", height: "6.4rem", borderRadius: "50%",
+                        backgroundColor: isDark ? f.colors.feedback.errorBg : "#FEE2E2",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        margin: "0 auto 2rem",
+                    }}>
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none"
+                            stroke={f.colors.feedback.error} strokeWidth="2.5"
+                            strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M18 6 6 18M6 6l12 12" />
+                        </svg>
+                    </div>
+                    <h3 style={{ fontSize: "2rem", fontWeight: 700, color: f.colors.text.primary, marginBottom: "0.8rem" }}>
+                        Falha na importação
+                    </h3>
+                    <p style={{ fontSize: "1.4rem", color: muted }}>{errorMsg}</p>
                 </div>
             )}
         </Modal>
