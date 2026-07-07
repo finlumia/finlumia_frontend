@@ -213,6 +213,7 @@ export function RegisterPage() {
                     <GoogleSignInButton onCredential={handleGoogleCredential} onError={setApiError} disabled={isLoading}>
                         <button
                             type="button"
+                            disabled={isLoading}
                             style={{
                                 width: "100%",
                                 display: "flex",
@@ -226,13 +227,14 @@ export function RegisterPage() {
                                 color: f.colors.text.primary,
                                 fontSize: "1.4rem",
                                 fontWeight: 600,
-                                cursor: "pointer",
+                                cursor: isLoading ? "not-allowed" : "pointer",
+                                opacity: isLoading ? 0.6 : 1,
                                 fontFamily: "inherit",
-                                transition: "background-color 0.15s ease",
+                                transition: "background-color 0.15s ease, opacity 0.15s ease",
                             }}
                         >
                             <GoogleIcon />
-                            Cadastrar com Google
+                            {isLoading ? "Conectando..." : "Cadastrar com Google"}
                         </button>
                     </GoogleSignInButton>
                     <div style={{ marginBottom: "2rem" }} />

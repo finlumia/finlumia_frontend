@@ -82,7 +82,7 @@ NEXT_PUBLIC_SERVICE_CONFIGURATOR_LOCAL=http://localhost:8080/configurator
 
 # URLs para homologação e produção (ver .env.example para lista completa)
 # NEXT_PUBLIC_SERVICE_IDENTIFICATION_HOMOLOGATION=https://<seu-host-homologacao>/identification
-# NEXT_PUBLIC_SERVICE_IDENTIFICATION_PRODUCTION=https://apifinlumia.thiagobenevide.com.br/identification
+# NEXT_PUBLIC_SERVICE_IDENTIFICATION_PRODUCTION=https://apifinlumia.identification.thiagobenevide.com
 ```
 
 > **Importante:** variáveis `NEXT_PUBLIC_*` são incorporadas no build pelo Next.js. Alterar o `.env.local` após o build de produção **não** tem efeito — é necessário rebuildar.

@@ -4,6 +4,8 @@ import { z } from "zod";
 const IDENTIFY_BASE =
   process.env.SERVICE_IDENTIFICATION_URL ?? "http://localhost:28083";
 
+const BACKEND_TIMEOUT_MS = 8000;
+
 const LoginSchema = z.object({
   email:    z.string().email({ message: "E-mail inválido" }),
   password: z.string().min(1, { message: "Senha obrigatória" }),
@@ -53,13 +55,24 @@ export async function POST(req: NextRequest) {
 
   let backendRes: Response;
   try {
-    backendRes = await fetch(`${IDENTIFY_BASE}/api/identify/token`, {
-      method:  "POST",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify(parsed.data),
-    });
-  } catch {
-    return NextResponse.json({ message: "Serviço de autenticação indisponível" }, { status: 502 });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), BACKEND_TIMEOUT_MS);
+    try {
+      backendRes = await fetch(`${IDENTIFY_BASE}/api/identify/token`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(parsed.data),
+        signal:  controller.signal,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch (err) {
+    const timedOut = err instanceof Error && err.name === "AbortError";
+    return NextResponse.json(
+      { message: timedOut ? "Serviço de autenticação demorou para responder" : "Serviço de autenticação indisponível" },
+      { status: timedOut ? 504 : 502 },
+    );
   }
 
   if (!backendRes.ok) {
