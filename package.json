@@ -2,6 +2,7 @@
   "name": "finlumia",
   "private": true,
   "version": "0.0.0",
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -15,11 +16,13 @@
     "zod": "^3.23.0"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.2.0",
     "@eslint/js": "^10.0.1",
     "@types/node": "^24.12.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "eslint": "^10.2.1",
+    "eslint-config-next": "^15.5.18",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.5.0",
     "typescript": "~6.0.2",
