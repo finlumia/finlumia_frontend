@@ -60,15 +60,22 @@ export function middleware(request: NextRequest) {
   }
 
   const nonce = generateNonce();
+  const csp   = buildCsp(nonce);
 
-  // Injeta o nonce nas request headers para que Server Components o leiam via headers()
+  // Injeta o nonce e a CSP nas request headers: além de permitir que Server
+  // Components leiam o nonce via headers(), é assim que o Next.js descobre
+  // o nonce da requisição atual para carimbar automaticamente seus próprios
+  // scripts inline (payloads de streaming/hidratação do RSC). Sem a CSP na
+  // request (só na response), esses scripts saem sem nonce e o navegador os
+  // bloqueia, quebrando a hidratação.
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);
+  requestHeaders.set("Content-Security-Policy", csp);
 
   const response = NextResponse.next({ request: { headers: requestHeaders } });
 
-  // CSP por requisição (necessário para nonce funcionar)
-  response.headers.set("Content-Security-Policy", buildCsp(nonce));
+  // CSP por requisição na resposta (é o que o navegador de fato aplica)
+  response.headers.set("Content-Security-Policy", csp);
 
   return response;
 }
