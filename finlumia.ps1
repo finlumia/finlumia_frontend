@@ -154,11 +154,11 @@ function Start-FinlumiaUp {
         "-e", "NODE_ENV=development",
         "-e", "NEXT_TELEMETRY_DISABLED=1",
         "-e", "NPM_CONFIG_CACHE=/home/finlumia/.npm",
-        "-e", "SERVICE_IDENTIFICATION_URL=http://host.docker.internal:28083",
-        "-e", "SERVICE_MOVIMENTATION_URL=http://host.docker.internal:28084",
-        "-e", "SERVICE_DOCUMENT_URL=http://host.docker.internal:28085",
-        "-e", "SERVICE_CONFIGURATOR_URL=http://host.docker.internal:28081",
-        "-e", "SERVICE_SUPPORT_URL=http://host.docker.internal:28082",
+        # SERVICE_*_URL nao sao fixadas aqui: o Next.js le o .env.local
+        # (montado junto com o resto do repo em $AppMount). Se quiser apontar
+        # para backends locais em vez de producao, use host.docker.internal
+        # no lugar de localhost no .env.local, ja que "localhost" dentro do
+        # container aponta para o proprio container, nao para o host.
         $Image,
         "bash", "-lc",
         "npm run dev -- --hostname 0.0.0.0 --port 3000"
