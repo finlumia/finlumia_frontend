@@ -592,7 +592,7 @@ export function MovimentationPage() {
             <ConfirmDialog
                 open={!!confirmDelete}
                 onClose={() => setConfirmDelete(null)}
-                onConfirm={() => confirmDelete && handleDelete(confirmDelete.id)}
+                onConfirm={() => { if (confirmDelete) handleDelete(confirmDelete.id); }}
                 title="Excluir movimentação"
                 message={confirmDelete && (
                     <>

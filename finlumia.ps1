@@ -122,7 +122,11 @@ function Remove-FinlumiaContainer {
 
 function Remove-NodeModulesVolume {
     param([string]$VolumeName)
-    docker volume rm $VolumeName 2>$null | Out-Null
+    try {
+        docker volume rm $VolumeName 2>$null | Out-Null
+    } catch {
+        # Volume ainda nao existia (primeiro build) - nada a remover.
+    }
 }
 
 function Test-ContainerRunning {
