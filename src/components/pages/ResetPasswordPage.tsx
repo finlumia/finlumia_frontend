@@ -183,8 +183,11 @@ export function ResetPasswordPage() {
                             <h1 style={{ fontSize: "2rem", fontWeight: 700, color: f.colors.text.primary, marginBottom: "0.6rem" }}>
                                 Código de verificação
                             </h1>
-                            <p style={{ fontSize: "1.4rem", color: mutedColor, marginBottom: "2.8rem", lineHeight: 1.6 }}>
+                            <p style={{ fontSize: "1.4rem", color: mutedColor, marginBottom: "0.6rem", lineHeight: 1.6 }}>
                                 Digite os 6 dígitos enviados para o seu e-mail.
+                            </p>
+                            <p style={{ fontSize: "1.2rem", color: mutedColor, marginBottom: "2.8rem", lineHeight: 1.6 }}>
+                                Não encontrou o e-mail? Verifique também sua caixa de spam.
                             </p>
 
                             <OtpInput value={token} onChange={setToken} theme={theme} error={tokenError} />

@@ -402,8 +402,11 @@ export function RegisterPage() {
                             <h1 style={{ fontSize: "2rem", fontWeight: 700, color: f.colors.text.primary, marginBottom: "0.6rem" }}>
                                 Confirme seu e-mail
                             </h1>
-                            <p style={{ fontSize: "1.4rem", color: mutedColor, marginBottom: "2.8rem", lineHeight: 1.6 }}>
+                            <p style={{ fontSize: "1.4rem", color: mutedColor, marginBottom: "0.6rem", lineHeight: 1.6 }}>
                                 Enviamos um código de 6 dígitos para <strong>{email}</strong>. Digite abaixo para ativar sua conta.
+                            </p>
+                            <p style={{ fontSize: "1.2rem", color: mutedColor, marginBottom: "2.8rem", lineHeight: 1.6 }}>
+                                Não encontrou o e-mail? Verifique também sua caixa de spam.
                             </p>
 
                             <OtpInput value={code} onChange={setCode} theme={theme} error={codeError} />

@@ -556,7 +556,7 @@ export function Sidebar({
                             className={styles.logoutBtn}
                             aria-label="Sair da plataforma"
                             title="Sair"
-                            style={{ color: muted }}
+                            style={{ color: f.colors.feedback.error }}
                         >
                             {ICONS.LogOut}
                         </button>

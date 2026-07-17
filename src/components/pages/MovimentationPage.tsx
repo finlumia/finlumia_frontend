@@ -85,6 +85,7 @@ export function MovimentationPage() {
         removeTransaction,
         refreshTransactions,
         isLoadingTransactions,
+        transactionsError,
         categories, paymentMethods, categoryById, bankById,
         loadData,
     } = useFinance();
@@ -327,14 +328,14 @@ export function MovimentationPage() {
             </div>
 
             {/* Error banner */}
-            {apiError && (
+            {(apiError || transactionsError) && (
                 <div style={{
                     marginTop: "1.2rem", padding: "1rem 1.4rem", borderRadius: "0.8rem",
                     backgroundColor: isDark ? f.colors.feedback.errorBg : "#FEF2F2",
                     border: `1px solid ${f.colors.feedback.error}`,
                     color: f.colors.feedback.error, fontSize: "1.3rem",
                 }}>
-                    {apiError}
+                    {apiError || transactionsError}
                 </div>
             )}
 

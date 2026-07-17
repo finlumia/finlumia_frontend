@@ -94,6 +94,8 @@ type FinanceContextValue = {
     transactions: Transaction[];
     budgets: BudgetView[];
     isLoadingTransactions: boolean;
+    /** Non-empty when the last transactions fetch failed — lets the UI tell "sem lançamentos" apart from "falha ao carregar". */
+    transactionsError: string;
 
     addCategory: (input: { label: string; color: string; bgColor?: string; appliesTo?: CategoryAppliesTo }) => void;
     removeCategory: (id: string) => void;
@@ -142,12 +144,14 @@ export function FinanceProvider({ children }: PropsWithChildren) {
     const [budgets, setBudgets] = useState<BudgetView[]>([]);
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [isLoadingTransactions, setIsLoadingTransactions] = useState(false);
+    const [transactionsError, setTransactionsError] = useState("");
     const [isLoadingBudgets, setIsLoadingBudgets] = useState(false);
     const dataLoadedRef = useRef(false);
     const hydratedForUserRef = useRef<string | null>(null);
 
     const fetchTransactions = useCallback(async () => {
         setIsLoadingTransactions(true);
+        setTransactionsError("");
         try {
             // API limita pageSize a 100 — busca todas as páginas e concatena.
             const MAX_PAGE_SIZE = 100;
@@ -164,7 +168,10 @@ export function FinanceProvider({ children }: PropsWithChildren) {
             }
             setTransactions(all as unknown as Transaction[]);
         } catch {
-            /* keep empty — auth redirect or server error */
+            // Não zera `transactions` — uma falha de rede/sessão não pode ser
+            // confundida com "conta sem lançamentos" (a UI mostraria a lista
+            // vazia como se o histórico tivesse sumido). Sinaliza o erro à parte.
+            setTransactionsError("Não foi possível carregar suas movimentações. Verifique sua conexão e tente novamente.");
         } finally {
             setIsLoadingTransactions(false);
         }
@@ -368,7 +375,7 @@ export function FinanceProvider({ children }: PropsWithChildren) {
 
     const value = useMemo<FinanceContextValue>(
         () => ({
-            categories, banks, paymentMethods, transactions, budgets, isLoadingTransactions, isLoadingBudgets,
+            categories, banks, paymentMethods, transactions, budgets, isLoadingTransactions, transactionsError, isLoadingBudgets,
             addCategory, removeCategory,
             addBank, removeBank,
             addPaymentMethod, removePaymentMethod,
@@ -377,7 +384,7 @@ export function FinanceProvider({ children }: PropsWithChildren) {
             budgetStatusFor, categoryById, bankById, methodById,
         }),
         [
-            categories, banks, paymentMethods, transactions, budgets, isLoadingTransactions, isLoadingBudgets,
+            categories, banks, paymentMethods, transactions, budgets, isLoadingTransactions, transactionsError, isLoadingBudgets,
             addCategory, removeCategory, addBank, removeBank, addPaymentMethod, removePaymentMethod,
             appendTransaction, updateTransaction, removeTransaction, refreshTransactions, loadData,
             appendBudget, updateBudget, removeBudget, refreshBudgets,
