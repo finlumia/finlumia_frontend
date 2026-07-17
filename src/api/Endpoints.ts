@@ -86,6 +86,14 @@ export const API_ENDPOINTS = {
     confirmFileImport: ep("movimentation", "/api/v1/transactions/import/:jobId/import",       "POST"),
   },
 
+  budgets: {
+    list:     ep("movimentation", "/api/v1/budgets",     "GET"),
+    getById:  ep("movimentation", "/api/v1/budgets/:id", "GET"),
+    create:   ep("movimentation", "/api/v1/budgets",     "POST"),
+    update:   ep("movimentation", "/api/v1/budgets/:id", "PUT"),
+    delete:   ep("movimentation", "/api/v1/budgets/:id", "DELETE"),
+  },
+
   categories: {
     list: ep("movimentation", "/api/v1/categories", "GET"),
   },

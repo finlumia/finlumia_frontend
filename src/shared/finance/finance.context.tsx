@@ -9,11 +9,15 @@ import {
     type Transaction,
     type CategoryAppliesTo,
 } from "../../config/transactions";
-import { legacyMonthToPeriod, periodsOverlap, formatDateShort, type DatePeriod } from "./period.utils";
+import { periodsOverlap, formatDateShort, type DatePeriod } from "./period.utils";
 import {
     transactionsService,
     categoriesService,
     institutionsService,
+    budgetsService,
+    type BudgetView,
+    type BudgetType,
+    type BudgetScope,
 } from "../../services/movimentation/movement.service";
 import { useAuth } from "../../contexts/auth.context";
 
@@ -23,20 +27,7 @@ export type Category = { id: string; label: string; color: string; bgColor: stri
 export type Bank = { id: string; label: string; color: string; abbr: string; isDefault: boolean };
 export type PayMethod = { id: string; label: string; isDefault: boolean };
 
-export type BudgetScope = "global" | "category" | "method" | "bank";
-
-export type Budget = {
-    id: string;
-    name: string;
-    scope: BudgetScope;
-    refId: string | null;
-    amount: number;
-    periodStart: string;
-    periodEnd: string;
-};
-
-/** @deprecated Legacy shape persisted before period support */
-type LegacyBudget = Budget & { month?: string };
+export type { BudgetType, BudgetScope, BudgetView };
 
 // ── Defaults projected into catalog shape ───────────────────────────────────
 
@@ -50,7 +41,6 @@ const KEYS = {
     customCategories: "finlumia-custom-categories",
     customBanks: "finlumia-custom-banks",
     customMethods: "finlumia-custom-methods",
-    budgets: "finlumia-budgets",
 };
 
 // As chaves são namespaced por usuário: sem isso, duas contas usando o mesmo
@@ -88,29 +78,10 @@ const slugify = (value: string) =>
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/(^-|-$)/g, "") || `item-${Date.now()}`;
 
-const uid = () => `id-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-
-function normalizeBudget(raw: LegacyBudget): Budget {
-    if (raw.periodStart && raw.periodEnd) {
-        const rest = { ...raw };
-        delete rest.month;
-        return rest;
-    }
-    if (raw.month) {
-        const { month, ...rest } = raw;
-        const period = legacyMonthToPeriod(month);
-        return { ...rest, periodStart: period.start, periodEnd: period.end };
-    }
-    const period = legacyMonthToPeriod(new Date().toISOString().slice(0, 7));
-    return { ...raw, periodStart: period.start, periodEnd: period.end };
-}
-
 // ── Context shape ───────────────────────────────────────────────────────────
 
-export type BudgetStatus = Budget & {
-    spent: number;
+export type BudgetStatus = BudgetView & {
     remaining: number;
-    percent: number;
     exceeded: boolean;
     scopeLabel: string;
     periodLabel: string;
@@ -121,7 +92,7 @@ type FinanceContextValue = {
     banks: Bank[];
     paymentMethods: PayMethod[];
     transactions: Transaction[];
-    budgets: Budget[];
+    budgets: BudgetView[];
     isLoadingTransactions: boolean;
 
     addCategory: (input: { label: string; color: string; bgColor?: string; appliesTo?: CategoryAppliesTo }) => void;
@@ -144,9 +115,15 @@ type FinanceContextValue = {
     /** Loads transactions + catalog (categories/institutions) on demand. Safe to call multiple times — only fetches once per session. */
     loadData: () => void;
 
-    addBudget: (b: Omit<Budget, "id">) => void;
-    updateBudget: (id: string, patch: Partial<Omit<Budget, "id">>) => void;
+    isLoadingBudgets: boolean;
+    /** Appends a budget that already has an API-assigned id (call after create). */
+    appendBudget: (b: BudgetView) => void;
+    /** Replaces a budget in local state (call after API update). */
+    updateBudget: (id: string, b: BudgetView) => void;
+    /** Removes a budget from local state (call after API delete). */
     removeBudget: (id: string) => void;
+    /** Refetches all budgets from the API. */
+    refreshBudgets: () => Promise<void>;
 
     budgetStatusFor: (filter: DatePeriod) => BudgetStatus[];
     categoryById: (id: string) => Category | undefined;
@@ -162,9 +139,10 @@ export function FinanceProvider({ children }: PropsWithChildren) {
     const [customCategories, setCustomCategories] = useState<Category[]>([]);
     const [customBanks, setCustomBanks] = useState<Bank[]>([]);
     const [customMethods, setCustomMethods] = useState<PayMethod[]>([]);
-    const [budgets, setBudgets] = useState<Budget[]>([]);
+    const [budgets, setBudgets] = useState<BudgetView[]>([]);
     const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [isLoadingTransactions, setIsLoadingTransactions] = useState(false);
+    const [isLoadingBudgets, setIsLoadingBudgets] = useState(false);
     const dataLoadedRef = useRef(false);
     const hydratedForUserRef = useRef<string | null>(null);
 
@@ -192,6 +170,25 @@ export function FinanceProvider({ children }: PropsWithChildren) {
         }
     }, []);
 
+    const fetchBudgets = useCallback(async () => {
+        setIsLoadingBudgets(true);
+        try {
+            const MAX_PAGE_SIZE = 100;
+            const first = await budgetsService.list({ page: 1, pageSize: MAX_PAGE_SIZE });
+            const all = [...first.data];
+            const totalPages = first.meta.totalPages ?? 1;
+            for (let page = 2; page <= totalPages; page++) {
+                const res = await budgetsService.list({ page, pageSize: MAX_PAGE_SIZE });
+                all.push(...res.data);
+            }
+            setBudgets(all);
+        } catch {
+            /* keep empty — auth redirect or server error */
+        } finally {
+            setIsLoadingBudgets(false);
+        }
+    }, []);
+
     // Hidrata o localStorage por usuário. Reage a userId (não só ao mount):
     // ao trocar de conta no mesmo navegador, zera o estado em memória e troca
     // para as chaves da nova conta — nunca reaproveita dados da conta anterior.
@@ -212,7 +209,7 @@ export function FinanceProvider({ children }: PropsWithChildren) {
         setCustomCategories(loadJSON<Category[]>(scopedKey(KEYS.customCategories, userId), []));
         setCustomBanks(loadJSON<Bank[]>(scopedKey(KEYS.customBanks, userId), []));
         setCustomMethods(loadJSON<PayMethod[]>(scopedKey(KEYS.customMethods, userId), []));
-        setBudgets(loadJSON<LegacyBudget[]>(scopedKey(KEYS.budgets, userId), []).map(normalizeBudget));
+        setBudgets([]);
         setTransactions([]);
         dataLoadedRef.current = false;
     }, [userId]);
@@ -224,6 +221,7 @@ export function FinanceProvider({ children }: PropsWithChildren) {
         dataLoadedRef.current = true;
 
         fetchTransactions();
+        fetchBudgets();
 
         categoriesService.list().then((apiCats) => {
             setCustomCategories((prev) => {
@@ -257,7 +255,7 @@ export function FinanceProvider({ children }: PropsWithChildren) {
                 return newBanks.length > 0 ? [...prev, ...newBanks] : prev;
             });
         }).catch(() => { /* use defaults */ });
-    }, [isAuthenticated, authLoading, fetchTransactions]);
+    }, [isAuthenticated, authLoading, fetchTransactions, fetchBudgets]);
 
     // Persist custom data on change.
     // Nunca grava sem userId — evitaria vazar para uma chave global reaproveitável
@@ -265,7 +263,6 @@ export function FinanceProvider({ children }: PropsWithChildren) {
     useEffect(() => { if (userId) saveJSON(scopedKey(KEYS.customCategories, userId), customCategories); }, [userId, customCategories]);
     useEffect(() => { if (userId) saveJSON(scopedKey(KEYS.customBanks, userId), customBanks); }, [userId, customBanks]);
     useEffect(() => { if (userId) saveJSON(scopedKey(KEYS.customMethods, userId), customMethods); }, [userId, customMethods]);
-    useEffect(() => { if (userId) saveJSON(scopedKey(KEYS.budgets, userId), budgets); }, [userId, budgets]);
 
     const categories = useMemo(() => [...DEFAULT_CATS, ...customCategories], [customCategories]);
     const banks = useMemo(() => [...DEFAULT_BANKS, ...customBanks], [customBanks]);
@@ -327,16 +324,20 @@ export function FinanceProvider({ children }: PropsWithChildren) {
         await fetchTransactions();
     }, [fetchTransactions]);
 
-    // ── Budget mutations ──
-    const addBudget = useCallback((b: Omit<Budget, "id">) => {
-        setBudgets((prev) => [...prev, { ...b, id: uid() }]);
+    // ── Budget mutations (o backend calcula currentTotal/progressPercent — o
+    // estado local só espelha o que a API já retornou em create/update/delete) ──
+    const appendBudget = useCallback((b: BudgetView) => {
+        setBudgets((prev) => [b, ...prev]);
     }, []);
-    const updateBudget = useCallback((id: string, patch: Partial<Omit<Budget, "id">>) => {
-        setBudgets((prev) => prev.map((b) => (b.id === id ? { ...b, ...patch } : b)));
+    const updateBudget = useCallback((id: string, b: BudgetView) => {
+        setBudgets((prev) => prev.map((p) => (p.id === id ? b : p)));
     }, []);
     const removeBudget = useCallback((id: string) => {
         setBudgets((prev) => prev.filter((b) => b.id !== id));
     }, []);
+    const refreshBudgets = useCallback(async () => {
+        await fetchBudgets();
+    }, [fetchBudgets]);
 
     const categoryById = useCallback((id: string) => categories.find((c) => c.id === id), [categories]);
     const bankById = useCallback((id: string) => banks.find((b) => b.id === id), [banks]);
@@ -350,50 +351,36 @@ export function FinanceProvider({ children }: PropsWithChildren) {
                     filter,
                 ))
                 .map((b) => {
-                    const periodTx = transactions.filter(
-                        (t) => t.type === "despesa"
-                            && t.date >= b.periodStart
-                            && t.date <= b.periodEnd,
-                    );
-                    const spent = periodTx
-                        .filter((t) => {
-                            if (b.scope === "global") return true;
-                            if (b.scope === "category") return t.category === b.refId;
-                            if (b.scope === "method") return t.method === b.refId;
-                            if (b.scope === "bank") return t.institution === b.refId;
-                            return false;
-                        })
-                        .reduce((sum, t) => sum + t.amount, 0);
-                    const remaining = b.amount - spent;
-                    const percent = b.amount > 0 ? (spent / b.amount) * 100 : 0;
-                    let scopeLabel = "Geral (todas as despesas)";
-                    if (b.scope === "category") scopeLabel = `Setor: ${categoryById(b.refId ?? "")?.label ?? b.refId}`;
-                    if (b.scope === "method") scopeLabel = `Forma de pagamento: ${methodById(b.refId ?? "")?.label ?? b.refId}`;
-                    if (b.scope === "bank") scopeLabel = `Banco: ${bankById(b.refId ?? "")?.label ?? b.refId}`;
+                    const remaining = b.limitAmount - b.currentTotal;
+                    let scopeLabel = b.type === "receita" ? "Geral (todas as receitas)" : "Geral (todas as despesas)";
+                    if (b.scope === "categoria") scopeLabel = `Setor: ${categoryById(b.scopeValue ?? "")?.label ?? b.scopeValue}`;
+                    if (b.scope === "forma_pagamento") scopeLabel = `Forma de pagamento: ${methodById(b.scopeValue ?? "")?.label ?? b.scopeValue}`;
+                    if (b.scope === "banco") scopeLabel = `Banco: ${bankById(b.scopeValue ?? "")?.label ?? b.scopeValue}`;
                     const periodLabel = b.periodStart === b.periodEnd
                         ? formatDateShort(b.periodStart)
                         : `${formatDateShort(b.periodStart)} – ${formatDateShort(b.periodEnd)}`;
-                    return { ...b, spent, remaining, percent, exceeded: spent > b.amount, scopeLabel, periodLabel };
+                    // Para despesa, ultrapassar o limite é um alerta; para receita, atingir/superar a meta é sucesso.
+                    return { ...b, remaining, exceeded: b.currentTotal > b.limitAmount, scopeLabel, periodLabel };
                 });
         },
-        [budgets, transactions, categoryById, methodById, bankById],
+        [budgets, categoryById, methodById, bankById],
     );
 
     const value = useMemo<FinanceContextValue>(
         () => ({
-            categories, banks, paymentMethods, transactions, budgets, isLoadingTransactions,
+            categories, banks, paymentMethods, transactions, budgets, isLoadingTransactions, isLoadingBudgets,
             addCategory, removeCategory,
             addBank, removeBank,
             addPaymentMethod, removePaymentMethod,
             appendTransaction, updateTransaction, removeTransaction, refreshTransactions, loadData,
-            addBudget, updateBudget, removeBudget,
+            appendBudget, updateBudget, removeBudget, refreshBudgets,
             budgetStatusFor, categoryById, bankById, methodById,
         }),
         [
-            categories, banks, paymentMethods, transactions, budgets, isLoadingTransactions,
+            categories, banks, paymentMethods, transactions, budgets, isLoadingTransactions, isLoadingBudgets,
             addCategory, removeCategory, addBank, removeBank, addPaymentMethod, removePaymentMethod,
             appendTransaction, updateTransaction, removeTransaction, refreshTransactions, loadData,
-            addBudget, updateBudget, removeBudget,
+            appendBudget, updateBudget, removeBudget, refreshBudgets,
             budgetStatusFor, categoryById, bankById, methodById,
         ],
     );

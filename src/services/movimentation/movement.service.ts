@@ -44,6 +44,61 @@ export const institutionsService = {
     http.get<{ data: Institution[] }>(API_ENDPOINTS.institutions.list.url, {}).then((res) => res.data),
 };
 
+// ── Orçamentos ────────────────────────────────────────────────────────────
+
+export type BudgetType = "despesa" | "receita";
+export type BudgetScope = "geral" | "categoria" | "forma_pagamento" | "banco";
+
+export type BudgetView = {
+  id: string;
+  name: string;
+  type: BudgetType;
+  scope: BudgetScope;
+  scopeValue: string | null;
+  limitAmount: number;
+  periodStart: string;
+  periodEnd: string;
+  currentTotal: number;
+  progressPercent: number;
+  notifiedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type BudgetUpsertRequest = {
+  name: string;
+  type: BudgetType;
+  scope: BudgetScope;
+  scopeValue: string | null;
+  limitAmount: number;
+  periodStart: string;
+  periodEnd: string;
+};
+
+export type BudgetListQuery = { page?: number; pageSize?: number; type?: BudgetType };
+
+export const budgetsService = {
+  list: (params: BudgetListQuery = {}) =>
+    http.get<PaginatedResponse<BudgetView>>(
+      `${API_ENDPOINTS.budgets.list.url}${toQuery(params as QueryParams)}`,
+    ),
+
+  getById: (id: string) =>
+    http.get<BudgetView>(buildUrl(API_ENDPOINTS.budgets.getById, { id })),
+
+  create: (data: BudgetUpsertRequest) =>
+    http.post<BudgetView>(API_ENDPOINTS.budgets.create.url, data),
+
+  // Atenção: um PUT reseta o alerta (notifiedAt volta a null) — se o total já
+  // ultrapassava o limite antes da edição, um novo lançamento pode disparar
+  // o alerta de novo. É intencional: editar o limite implica reavaliação.
+  update: (id: string, data: BudgetUpsertRequest) =>
+    http.put<BudgetView>(buildUrl(API_ENDPOINTS.budgets.update, { id }), data),
+
+  delete: (id: string) =>
+    http.delete<void>(buildUrl(API_ENDPOINTS.budgets.delete, { id })),
+};
+
 // ── Transações ────────────────────────────────────────────────────────────
 
 export type TransactionPatchRequest = {

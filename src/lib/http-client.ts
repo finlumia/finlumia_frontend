@@ -25,6 +25,13 @@ type RequestOptions = Omit<RequestInit, "headers"> & {
   headers?: Record<string, string>;
 };
 
+/** Só faz parse quando há corpo de fato — vários endpoints respondem 200/204 sem conteúdo. */
+async function parseBody<T>(res: Response): Promise<T> {
+  if (res.status === 204) return undefined as T;
+  const text = await res.text();
+  return (text ? JSON.parse(text) : undefined) as T;
+}
+
 async function request<T>(url: string, options: RequestOptions = {}): Promise<T> {
   const { headers: extra = {}, ...init } = options;
 
@@ -46,7 +53,7 @@ async function request<T>(url: string, options: RequestOptions = {}): Promise<T>
   // definem "message" explicitamente), então ela tem prioridade sobre o texto
   // genérico de fallback.
   if (res.status === 401) {
-    const payload = await res.json().catch(() => null) as { message?: string } | null;
+    const payload = await parseBody<{ message?: string } | null>(res).catch(() => null);
     if (window.location.pathname.startsWith(PROTECTED_PREFIX)) {
       window.location.replace("/login");
     }
@@ -54,12 +61,11 @@ async function request<T>(url: string, options: RequestOptions = {}): Promise<T>
   }
 
   if (!res.ok) {
-    const payload = await res.json().catch(() => null);
+    const payload = await parseBody(res).catch(() => null);
     throw payload ?? { message: `Erro ${res.status}: ${res.statusText}` };
   }
 
-  if (res.status === 204) return undefined as T;
-  return res.json() as Promise<T>;
+  return parseBody<T>(res);
 }
 
 export const http = {

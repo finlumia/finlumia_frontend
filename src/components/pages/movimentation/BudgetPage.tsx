@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { parseMoney, maskCurrencyInput } from "../../../lib/money";
 import { Modal } from "../../organisms/Modal";
 import { Input } from "../../atoms/input";
@@ -10,23 +10,30 @@ import { getFoundationByTheme } from "../../../shared/styles/tokens";
 import { useTheme } from "../../../shared/styles/theme.context";
 import {
     useFinance, currentMonthPeriod,
-    type BudgetScope, type BudgetStatus, type DatePeriod,
+    type BudgetScope, type BudgetType, type BudgetStatus, type DatePeriod,
 } from "../../../shared/finance/finance.context";
+import { budgetsService, type BudgetUpsertRequest } from "../../../services/movimentation/movement.service";
 import { formatPeriodShort, isValidISO } from "../../../shared/finance/period.utils";
 
 function fmt(v: number) {
     return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-const SCOPE_OPTIONS: { id: BudgetScope; label: string }[] = [
-    { id: "global", label: "Geral (todas as despesas)" },
-    { id: "category", label: "Por setor / categoria" },
-    { id: "method", label: "Por forma de pagamento" },
-    { id: "bank", label: "Por banco" },
+const TYPE_OPTIONS: { id: BudgetType; label: string }[] = [
+    { id: "despesa", label: "Despesa (limite a não ultrapassar)" },
+    { id: "receita", label: "Receita (meta a atingir)" },
+];
+
+const SCOPE_OPTIONS: { id: BudgetScope; label: (type: BudgetType) => string }[] = [
+    { id: "geral", label: (t) => t === "receita" ? "Geral (todas as receitas)" : "Geral (todas as despesas)" },
+    { id: "categoria", label: () => "Por setor / categoria" },
+    { id: "forma_pagamento", label: () => "Por forma de pagamento" },
+    { id: "banco", label: () => "Por banco" },
 ];
 
 type FormState = {
     name: string;
+    type: BudgetType;
     scope: BudgetScope;
     refId: string;
     amount: string;
@@ -35,7 +42,8 @@ type FormState = {
 
 const emptyForm = (): FormState => ({
     name: "",
-    scope: "category",
+    type: "despesa",
+    scope: "categoria",
     refId: "",
     amount: "",
     period: currentMonthPeriod(),
@@ -53,19 +61,23 @@ export function BudgetPage() {
     const f = getFoundationByTheme(theme);
     const isDark = theme === "dark";
 
-    const { categories, paymentMethods, banks, addBudget, removeBudget, budgetStatusFor } = useFinance();
+    const { categories, paymentMethods, banks, appendBudget, removeBudget, budgetStatusFor, isLoadingBudgets, loadData } = useFinance();
+
+    useEffect(() => { loadData(); }, [loadData]);
 
     const [filterPeriod, setFilterPeriod] = useState<DatePeriod>(currentMonthPeriod());
     const [showModal, setShowModal] = useState(false);
     const [form, setForm] = useState<FormState>(emptyForm());
     const [errors, setErrors] = useState<Partial<Record<keyof FormState | "period", string>>>({});
+    const [isSaving, setIsSaving] = useState(false);
+    const [apiError, setApiError] = useState("");
 
     const statuses = useMemo(() => budgetStatusFor(filterPeriod), [budgetStatusFor, filterPeriod]);
     const exceeded = statuses.filter((s) => s.exceeded);
 
     const totals = useMemo(() => {
-        const budgeted = statuses.reduce((s, b) => s + b.amount, 0);
-        const spent = statuses.reduce((s, b) => s + b.spent, 0);
+        const budgeted = statuses.reduce((s, b) => s + b.limitAmount, 0);
+        const spent = statuses.reduce((s, b) => s + b.currentTotal, 0);
         return { budgeted, spent, remaining: budgeted - spent };
     }, [statuses]);
 
@@ -75,38 +87,65 @@ export function BudgetPage() {
     const surface = isDark ? f.colors.bg.elevated : "#FFFFFF";
 
     const refOptions = useMemo(() => {
-        if (form.scope === "category") return categories.map((c) => ({ value: c.id, label: c.label }));
-        if (form.scope === "method") return paymentMethods.map((m) => ({ value: m.id, label: m.label }));
-        if (form.scope === "bank") return banks.map((b) => ({ value: b.id, label: b.label }));
+        if (form.scope === "categoria") {
+            return categories
+                .filter((c) => c.appliesTo === "ambos" || c.appliesTo === form.type)
+                .map((c) => ({ value: c.id, label: c.label }));
+        }
+        if (form.scope === "forma_pagamento") return paymentMethods.map((m) => ({ value: m.id, label: m.label }));
+        if (form.scope === "banco") return banks.map((b) => ({ value: b.id, label: b.label }));
         return [];
-    }, [form.scope, categories, paymentMethods, banks]);
+    }, [form.scope, form.type, categories, paymentMethods, banks]);
 
     const openNew = () => {
         setForm(emptyForm());
         setErrors({});
+        setApiError("");
         setShowModal(true);
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
         const e: typeof errors = {};
         if (!form.name.trim()) e.name = "Informe um nome.";
         const amount = parseMoney(form.amount);
         if (!form.amount || isNaN(amount) || amount <= 0) e.amount = "Informe um valor válido.";
-        if (form.scope !== "global" && !form.refId) e.refId = "Selecione uma opção.";
+        if (form.scope !== "geral" && !form.refId) e.refId = "Selecione uma opção.";
         const periodErr = validatePeriod(form.period);
         if (periodErr) e.period = periodErr;
         setErrors(e);
         if (Object.keys(e).length > 0) return;
 
-        addBudget({
+        const payload: BudgetUpsertRequest = {
             name: form.name.trim(),
+            type: form.type,
             scope: form.scope,
-            refId: form.scope === "global" ? null : form.refId,
-            amount,
+            scopeValue: form.scope === "geral" ? null : form.refId,
+            limitAmount: amount,
             periodStart: form.period.start,
             periodEnd: form.period.end,
-        });
-        setShowModal(false);
+        };
+
+        setIsSaving(true);
+        setApiError("");
+        try {
+            const created = await budgetsService.create(payload);
+            appendBudget(created);
+            setShowModal(false);
+        } catch (err: unknown) {
+            setApiError((err as { message?: string })?.message ?? "Erro ao criar orçamento.");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleDelete = async (id: string) => {
+        setApiError("");
+        try {
+            await budgetsService.delete(id);
+            removeBudget(id);
+        } catch (err: unknown) {
+            setApiError((err as { message?: string })?.message ?? "Erro ao excluir orçamento.");
+        }
     };
 
     const card: React.CSSProperties = {
@@ -163,8 +202,17 @@ export function BudgetPage() {
                 />
             </div>
 
-            {/* Over-budget notification */}
-            {exceeded.length > 0 && (
+            {apiError && (
+                <div role="alert" style={{
+                    backgroundColor: f.colors.feedback.errorBg, border: `1px solid ${f.colors.feedback.error}55`,
+                    borderRadius: "1rem", padding: "1.2rem 1.6rem", margin: "1.6rem 0", color: f.colors.feedback.error, fontSize: "1.3rem",
+                }}>
+                    {apiError}
+                </div>
+            )}
+
+            {/* Over-budget notification (despesas ultrapassadas no período) */}
+            {exceeded.filter((b) => b.type === "despesa").length > 0 && (
                 <div role="alert" style={{
                     display: "flex", alignItems: "flex-start", gap: "1rem",
                     backgroundColor: f.colors.feedback.errorBg,
@@ -178,10 +226,13 @@ export function BudgetPage() {
                     </span>
                     <div>
                         <strong style={{ fontSize: "1.4rem", color: f.colors.feedback.error }}>
-                            {exceeded.length === 1 ? "1 orçamento ultrapassado" : `${exceeded.length} orçamentos ultrapassados`} no período
+                            {(() => {
+                                const n = exceeded.filter((b) => b.type === "despesa").length;
+                                return n === 1 ? "1 orçamento ultrapassado" : `${n} orçamentos ultrapassados`;
+                            })()} no período
                         </strong>
                         <div style={{ fontSize: "1.3rem", color: f.colors.text.secondary, marginTop: "0.3rem" }}>
-                            {exceeded.map((b) => `${b.name} (${fmt(b.spent)} / ${fmt(b.amount)})`).join(" · ")}
+                            {exceeded.filter((b) => b.type === "despesa").map((b) => `${b.name} (${fmt(b.currentTotal)} / ${fmt(b.limitAmount)})`).join(" · ")}
                         </div>
                     </div>
                 </div>
@@ -206,22 +257,43 @@ export function BudgetPage() {
             {/* Budget list */}
             {statuses.length === 0 ? (
                 <div style={{ ...card, textAlign: "center", padding: "4rem 2rem", color: muted }}>
-                    Nenhum orçamento ativo neste período. Clique em <strong style={{ color: primary }}>“+ Novo orçamento”</strong> para começar.
+                    {isLoadingBudgets ? "Carregando orçamentos..." : (
+                        <>Nenhum orçamento ativo neste período. Clique em <strong style={{ color: primary }}>“+ Novo orçamento”</strong> para começar.</>
+                    )}
                 </div>
             ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: "1.2rem" }}>
                     {statuses.map((b: BudgetStatus) => {
-                        const pct = Math.min(b.percent, 100);
-                        const barColor = b.exceeded ? f.colors.feedback.error : b.percent >= 80 ? f.colors.feedback.warning : primary;
+                        const isReceita = b.type === "receita";
+                        const pct = Math.min(b.progressPercent, 100);
+                        const goalReached = isReceita && b.currentTotal >= b.limitAmount;
+                        const barColor = b.exceeded && !isReceita ? f.colors.feedback.error
+                            : goalReached ? f.colors.feedback.success
+                            : b.progressPercent >= 80 ? f.colors.feedback.warning
+                            : primary;
+                        const highlightColor = b.exceeded && !isReceita ? f.colors.feedback.error : goalReached ? f.colors.feedback.success : undefined;
                         return (
-                            <div key={b.id} style={{ ...card, borderColor: b.exceeded ? `${f.colors.feedback.error}66` : border }}>
+                            <div key={b.id} style={{ ...card, borderColor: highlightColor ? `${highlightColor}66` : border }}>
                                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "1rem", flexWrap: "wrap" }}>
                                     <div>
                                         <div style={{ display: "flex", alignItems: "center", gap: "0.8rem", flexWrap: "wrap" }}>
                                             <h3 style={{ fontSize: "1.7rem", fontWeight: 700, color: f.colors.text.primary }}>{b.name}</h3>
-                                            {b.exceeded && (
+                                            <span style={{ fontSize: "1.1rem", fontWeight: 700, color: muted, backgroundColor: isDark ? f.colors.bg.surface : f.colors.bg.elevated, padding: "0.2rem 0.7rem", borderRadius: "999px" }}>
+                                                {isReceita ? "Receita" : "Despesa"}
+                                            </span>
+                                            {b.exceeded && !isReceita && (
                                                 <span style={{ fontSize: "1.1rem", fontWeight: 700, color: f.colors.feedback.error, backgroundColor: f.colors.feedback.errorBg, padding: "0.2rem 0.7rem", borderRadius: "999px", border: `1px solid ${f.colors.feedback.error}55` }}>
                                                     Ultrapassado
+                                                </span>
+                                            )}
+                                            {goalReached && (
+                                                <span style={{ fontSize: "1.1rem", fontWeight: 700, color: f.colors.feedback.success, backgroundColor: `${f.colors.feedback.success}22`, padding: "0.2rem 0.7rem", borderRadius: "999px", border: `1px solid ${f.colors.feedback.success}55` }}>
+                                                    Meta atingida
+                                                </span>
+                                            )}
+                                            {b.notifiedAt && (
+                                                <span style={{ fontSize: "1.1rem", fontWeight: 600, color: muted, border: `1px solid ${border}`, padding: "0.2rem 0.7rem", borderRadius: "999px" }}>
+                                                    Alerta enviado
                                                 </span>
                                             )}
                                         </div>
@@ -230,10 +302,12 @@ export function BudgetPage() {
                                     </div>
                                     <div style={{ textAlign: "right" }}>
                                         <div style={{ fontSize: "1.6rem", fontWeight: 700, color: f.colors.text.primary }}>
-                                            {fmt(b.spent)} <span style={{ color: muted, fontWeight: 400 }}>/ {fmt(b.amount)}</span>
+                                            {fmt(b.currentTotal)} <span style={{ color: muted, fontWeight: 400 }}>/ {fmt(b.limitAmount)}</span>
                                         </div>
-                                        <div style={{ fontSize: "1.2rem", color: b.remaining >= 0 ? f.colors.feedback.success : f.colors.feedback.error }}>
-                                            {b.remaining >= 0 ? `${fmt(b.remaining)} disponível` : `${fmt(Math.abs(b.remaining))} acima`}
+                                        <div style={{ fontSize: "1.2rem", color: isReceita ? muted : (b.remaining >= 0 ? f.colors.feedback.success : f.colors.feedback.error) }}>
+                                            {isReceita
+                                                ? (b.remaining > 0 ? `${fmt(b.remaining)} para a meta` : "Meta atingida")
+                                                : (b.remaining >= 0 ? `${fmt(b.remaining)} disponível` : `${fmt(Math.abs(b.remaining))} acima`)}
                                         </div>
                                     </div>
                                 </div>
@@ -241,10 +315,10 @@ export function BudgetPage() {
                                     <div style={{ width: `${pct}%`, height: "100%", backgroundColor: barColor, borderRadius: "999px", transition: "width 0.3s ease" }} />
                                 </div>
                                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "0.8rem" }}>
-                                    <span style={{ fontSize: "1.2rem", color: muted }}>{b.percent.toFixed(0)}% utilizado</span>
+                                    <span style={{ fontSize: "1.2rem", color: muted }}>{b.progressPercent.toFixed(0)}% {isReceita ? "da meta" : "utilizado"}</span>
                                     <button
                                         type="button"
-                                        onClick={() => removeBudget(b.id)}
+                                        onClick={() => handleDelete(b.id)}
                                         style={{ background: "none", border: "none", color: muted, cursor: "pointer", fontSize: "1.25rem", fontFamily: "inherit", display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
                                         aria-label={`Excluir orçamento ${b.name}`}
                                     >
@@ -265,7 +339,7 @@ export function BudgetPage() {
                 open={showModal}
                 onClose={() => setShowModal(false)}
                 title="Novo orçamento"
-                subtitle="Defina um limite para o período e seja avisado ao ultrapassá-lo"
+                subtitle="Defina um limite (despesa) ou uma meta (receita) para o período e seja avisado por e-mail"
                 size="lg"
                 theme={theme}
                 footer={
@@ -273,12 +347,16 @@ export function BudgetPage() {
                         <button type="button" onClick={() => setShowModal(false)} style={{ background: "none", border: "none", color: muted, fontSize: "1.4rem", cursor: "pointer", fontFamily: "inherit", padding: "0 1.2rem" }}>
                             Cancelar
                         </button>
-                        <Button label="Criar orçamento" type="button" theme={theme} variant="primary" size="md" onClick={handleSave}
+                        <Button label={isSaving ? "Criando..." : "Criar orçamento"} type="button" theme={theme} variant="primary" size="md" onClick={handleSave} disabled={isSaving}
                             styleConfig={{ backgroudColor: primary, textColor: "#fff", border: "none", borderRadius: "0.8rem", padding: "0 2.4rem" }} />
                     </>
                 }
             >
                 <div style={{ display: "flex", flexDirection: "column", gap: "1.6rem" }}>
+                    {apiError && (
+                        <div role="alert" style={{ color: f.colors.feedback.error, fontSize: "1.3rem" }}>{apiError}</div>
+                    )}
+
                     <Input
                         id="budget-name" name="name" label="Nome do orçamento"
                         type="text" placeholder="Ex.: Alimentação — trimestre" value={form.name}
@@ -287,20 +365,31 @@ export function BudgetPage() {
                     />
 
                     <div>
+                        <label style={labelStyle}>Tipo</label>
+                        <select
+                            value={form.type}
+                            onChange={(e) => setForm((p) => ({ ...p, type: e.target.value as BudgetType, refId: "" }))}
+                            style={selectStyle}
+                        >
+                            {TYPE_OPTIONS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                        </select>
+                    </div>
+
+                    <div>
                         <label style={labelStyle}>Gerar orçamento por</label>
                         <select
                             value={form.scope}
                             onChange={(e) => setForm((p) => ({ ...p, scope: e.target.value as BudgetScope, refId: "" }))}
                             style={selectStyle}
                         >
-                            {SCOPE_OPTIONS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                            {SCOPE_OPTIONS.map((o) => <option key={o.id} value={o.id}>{o.label(form.type)}</option>)}
                         </select>
                     </div>
 
-                    {form.scope !== "global" && (
+                    {form.scope !== "geral" && (
                         <div>
                             <label style={labelStyle}>
-                                {form.scope === "category" ? "Setor / categoria" : form.scope === "method" ? "Forma de pagamento" : "Banco"}
+                                {form.scope === "categoria" ? "Setor / categoria" : form.scope === "forma_pagamento" ? "Forma de pagamento" : "Banco"}
                                 {errors.refId && <span style={{ color: f.colors.feedback.error, fontWeight: 400 }}> — {errors.refId}</span>}
                             </label>
                             <select
@@ -315,7 +404,7 @@ export function BudgetPage() {
                     )}
 
                     <Input
-                        id="budget-amount" name="amount" label="Limite do período (R$)"
+                        id="budget-amount" name="amount" label={form.type === "receita" ? "Meta do período (R$)" : "Limite do período (R$)"}
                         type="text" placeholder="0,00" value={form.amount}
                         theme={theme} required error={errors.amount}
                         onChange={(e) => setForm((p) => ({ ...p, amount: maskCurrencyInput(e.target.value) }))}
