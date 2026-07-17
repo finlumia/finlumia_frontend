@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ThemeMode } from "../../shared/styles/theme.types";
 import { Header } from "../organisms/Header";
@@ -9,17 +9,24 @@ import type { TextStyleConfig } from "../atoms/text";
 import type { ButtonStyleConfig } from "../atoms/button";
 import { getFoundationByTheme } from "../../shared/styles/tokens";
 import { useTheme } from "../../shared/styles/theme.context";
+import styles from "./LandingPage.module.css";
 
 const finlumiaIcon = "/assets/icone_finlumia.svg";
-const heroDashboard = "/assets/hero_dashboard.svg";
+const heroImage = "/assets/image_landing_page_compress.png";
+const QUESTIONNAIRE_URL = "https://docs.google.com/forms/d/e/1FAIpQLSfNxiHab95WE42ZEkaOh-Y78xrEgyMw-kWXEr8kQ3OKAzCJlw/viewform?usp=dialog";
+
+function scrollToId(id: string) {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function openExternal(url: string) {
+    window.open(url, "_blank", "noopener,noreferrer");
+}
 
 /**
- * Landing page entrypoint.
+ * Landing page — projeto acadêmico de IHM.
  *
- * Acts as reference composition for the final Header layout:
- * - left: logo
- * - center: navigation labels
- * - right: action buttons
+ * Foco em clareza, confiança e demonstração da ferramenta, não em conversão.
  */
 export function LandingPage() {
     const router = useRouter();
@@ -38,12 +45,11 @@ export function LandingPage() {
     const navTextStyle: TextStyleConfig = {
         backgroundColor: "transparent",
         textColor: foundation.colors.text.muted,
-        fontWeight: "500",
+        fontWeight: "600",
         fontSize: "var(--nav-font-size)",
         padding: "0",
         height: "auto",
-        cursor: "default",
-        opacity: 0.65,
+        cursor: "pointer",
         display: "var(--header-nav-display)",
     };
 
@@ -68,6 +74,13 @@ export function LandingPage() {
         fontSize: "var(--button-font-size)",
         fontWeight: "700",
     };
+
+    const indicators = [
+        "Gratuita para fins acadêmicos",
+        "Sem anúncios",
+        "Dados privados",
+        "Interface intuitiva",
+    ];
 
     return (
         <main>
@@ -96,15 +109,24 @@ export function LandingPage() {
                     centerItems={[
                         {
                             type: "text",
-                            props: { label: "Recursos", styleConfig: navTextStyle, theme },
+                            props: { label: "Recursos", styleConfig: navTextStyle, theme, onClick: () => scrollToId("recursos") },
                         },
                         {
                             type: "text",
-                            props: { label: "Planos", styleConfig: navTextStyle, theme },
+                            props: { label: "Como funciona", styleConfig: navTextStyle, theme, onClick: () => scrollToId("como-funciona") },
                         },
                         {
                             type: "text",
-                            props: { label: "Documentação", styleConfig: navTextStyle, theme },
+                            props: { label: "Perguntas", styleConfig: navTextStyle, theme, onClick: () => scrollToId("faq") },
+                        },
+                        {
+                            type: "text",
+                            props: {
+                                label: "Responder questionário",
+                                styleConfig: { ...navTextStyle, textColor: foundation.colors.brand.primary },
+                                theme,
+                                onClick: () => openExternal(QUESTIONNAIRE_URL),
+                            },
                         },
                     ]}
                     rightItems={[
@@ -122,7 +144,7 @@ export function LandingPage() {
                         {
                             type: "button",
                             props: {
-                                label: "Criar conta gratis",
+                                label: "Acessar ferramenta",
                                 theme,
                                 variant: "primary",
                                 size: "md",
@@ -134,17 +156,19 @@ export function LandingPage() {
                 />
                 <HeroSection
                     theme={theme}
-                    badgeText="ANÁLISE FINANCEIRA PESSOAL"
-                    title="Clareza financeira para decisões mais"
-                    highlightTitle="inteligentes"
-                    description="Centralize suas transações, identifique seus padrões de gastos e gere insights para que retome o controle total do seu patrimônio com precisão."
+                    badgeText="PROJETO ACADÊMICO · IHM"
+                    title="Entenda seu dinheiro. Organize sua vida."
+                    highlightTitle="Decida com confiança."
+                    description="A Finlumia transforma transações financeiras em informações claras, ajudando você a entender seus hábitos, acompanhar sua evolução e tomar decisões melhores."
                     previewImage={{
-                        src: heroDashboard,
-                        alt: "Painel financeiro da plataforma Finlumia",
-                        isSvg: true,
+                        src: heroImage,
+                        alt: "Painel financeiro da Finlumia exibido em um notebook e em um smartphone, com gráficos de evolução de saldo e gastos por categoria",
+                        isSvg: false,
+                        className: styles.heroImage,
+                        styleConfig: { objectFit: "contain" },
                     }}
                     primaryAction={{
-                        label: "Começar gratuitamente",
+                        label: "Acessar ferramenta",
                         theme,
                         variant: "primary",
                         size: "md",
@@ -156,17 +180,36 @@ export function LandingPage() {
                         },
                     }}
                     secondaryAction={{
-                        label: "Ver demonstração",
+                        label: "Conhecer recursos",
                         theme,
                         variant: "outlined",
                         size: "md",
-                        onClick: () => router.push("/dashboard"),
+                        onClick: () => scrollToId("recursos"),
                         styleConfig: {
                             ...ghostButtonStyle,
                             display: "inline-flex",
                             height: "var(--button-height)",
                         },
                     }}
+                    belowActions={
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.6rem 1.6rem", marginTop: "0.4rem" }}>
+                            {indicators.map((label) => (
+                                <span
+                                    key={label}
+                                    style={{
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: "0.5rem",
+                                        fontSize: "0.95rem",
+                                        color: foundation.colors.text.secondary,
+                                    }}
+                                >
+                                    <CheckGlyph color={foundation.colors.brand.primary} />
+                                    {label}
+                                </span>
+                            ))}
+                        </div>
+                    }
                     textStyles={{
                         badge: {
                             margin: "0 0 0.6rem 0",
@@ -206,16 +249,49 @@ export function LandingPage() {
     );
 }
 
-// ── Marketing / conversion sections ─────────────────────────────────────────
+function CheckGlyph({ color }: { color: string }) {
+    return (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" opacity="0.15" fill={color} stroke="none" />
+            <path d="m8 12 3 3 6-6" />
+        </svg>
+    );
+}
+
+// ── Scroll reveal ────────────────────────────────────────────────────────────
+
+function Reveal({ children, className, style }: { children: React.ReactNode; className?: string; style?: React.CSSProperties }) {
+    const ref = useRef<HTMLDivElement>(null);
+    const [visible, setVisible] = useState(false);
+
+    useEffect(() => {
+        const el = ref.current;
+        if (!el) return;
+        const observer = new IntersectionObserver(
+            ([entry]) => {
+                if (entry.isIntersecting) {
+                    setVisible(true);
+                    observer.unobserve(el);
+                }
+            },
+            { threshold: 0.15 },
+        );
+        observer.observe(el);
+        return () => observer.disconnect();
+    }, []);
+
+    const classNames = [styles.reveal, visible ? styles.visible : "", className ?? ""].filter(Boolean).join(" ");
+    return <div ref={ref} className={classNames} style={style}>{children}</div>;
+}
+
+// ── Seções da landing (conteúdo, não venda) ─────────────────────────────────
 
 type SectionProps = { theme: ThemeMode };
 
 const ICON = {
-    radar: (
+    eye: (
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M19.07 4.93A10 10 0 0 0 6.99 3.34" /><path d="M4 6h.01" /><path d="M2.29 9.62A10 10 0 1 0 21.31 8.35" />
-            <path d="M16.24 7.76A6 6 0 1 0 8.23 16.67" /><path d="M12 18h.01" /><path d="M17.99 11.66A6 6 0 0 1 15.77 16.67" />
-            <circle cx="12" cy="12" r="2" /><path d="m13.41 10.59 5.66-5.66" />
+            <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z" /><circle cx="12" cy="12" r="3" />
         </svg>
     ),
     brain: (
@@ -224,25 +300,67 @@ const ICON = {
             <path d="M12 5a3 3 0 1 1 5.997.142 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z" />
         </svg>
     ),
-    shield: (
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><path d="m9 12 2 2 4-4" />
-        </svg>
-    ),
-    bell: (
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-        </svg>
-    ),
     target: (
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" />
         </svg>
     ),
-    sync: (
+    bolt: (
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" />
-            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M3 21v-5h5" />
+            <path d="M13 2 3 14h7l-1 8 10-12h-7l1-8Z" />
+        </svg>
+    ),
+    checkCircle: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" /><path d="m9 12 2 2 4-4" />
+        </svg>
+    ),
+    grid: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="7" height="9" rx="1" /><rect x="14" y="3" width="7" height="5" rx="1" />
+            <rect x="14" y="12" width="7" height="9" rx="1" /><rect x="3" y="16" width="7" height="5" rx="1" />
+        </svg>
+    ),
+    fileText: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" /><path d="M14 2v6h6" /><path d="M9 13h6" /><path d="M9 17h6" />
+        </svg>
+    ),
+    flag: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 3v18" /><path d="M4 4h13l-3 4 3 4H4" />
+        </svg>
+    ),
+    tag: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 2H2v10l9.29 9.29a1 1 0 0 0 1.42 0l8.58-8.58a1 1 0 0 0 0-1.42Z" /><circle cx="7" cy="7" r="1.5" />
+        </svg>
+    ),
+    activity: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+        </svg>
+    ),
+    sliders: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="4" y1="6" x2="20" y2="6" /><circle cx="9" cy="6" r="2" />
+            <line x1="4" y1="12" x2="20" y2="12" /><circle cx="15" cy="12" r="2" />
+            <line x1="4" y1="18" x2="20" y2="18" /><circle cx="8" cy="18" r="2" />
+        </svg>
+    ),
+    download: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M4 21h16" />
+        </svg>
+    ),
+    clock: (
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" />
+        </svg>
+    ),
+    arrowRight: (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M5 12h14" /><path d="m13 6 6 6-6 6" />
         </svg>
     ),
 };
@@ -256,29 +374,58 @@ function MarketingSections({ theme }: SectionProps) {
     const muted = f.colors.text.muted;
     const border = f.colors.border.default;
     const surface = isDark ? f.colors.bg.surface : "#FFFFFF";
+    const iconBg = isDark ? `${primary}22` : f.colors.feedback.infoBg;
 
     const [openFaq, setOpenFaq] = useState<number | null>(0);
 
-    const features = [
-        { icon: ICON.radar, title: "Gastos invisíveis, revelados", desc: "Descubra para onde seu dinheiro realmente vai. A Finlumia destaca assinaturas esquecidas e pequenos vazamentos que somam centenas por mês." },
-        { icon: ICON.brain, title: "Insights inteligentes", desc: "Análises automáticas mostram padrões de consumo e sugerem onde cortar sem abrir mão do que importa para você." },
-        { icon: ICON.sync, title: "Tudo em um só lugar", desc: "Centralize contas, cartões e investimentos. Chega de planilhas espalhadas e de adivinhar o saldo do mês." },
-        { icon: ICON.target, title: "Metas que você cumpre", desc: "Defina objetivos e acompanhe o progresso em tempo real, com marcos visuais que mantêm sua motivação lá em cima." },
-        { icon: ICON.bell, title: "Alertas no momento certo", desc: "Receba avisos antes de estourar o orçamento — e nunca mais pague juros por uma fatura esquecida." },
-        { icon: ICON.shield, title: "Segurança de banco", desc: "Criptografia de ponta a ponta e privacidade por padrão. Seus dados são seus — nunca vendemos suas informações." },
+    const discoveries = [
+        { icon: ICON.eye, title: "Veja para onde seu dinheiro realmente vai", desc: "Todas as suas transações organizadas em um único painel, sem planilhas soltas." },
+        { icon: ICON.brain, title: "Descubra hábitos de consumo", desc: "Identifique padrões recorrentes nos seus gastos e entenda o que influencia suas decisões." },
+        { icon: ICON.target, title: "Acompanhe sua evolução", desc: "Compare períodos e visualize como sua situação financeira muda ao longo do tempo." },
+        { icon: ICON.bolt, title: "Organize objetivos financeiros", desc: "Defina metas claras e acompanhe o progresso de cada uma em tempo real." },
     ];
 
     const steps = [
-        { n: "01", title: "Crie sua conta grátis", desc: "Menos de 1 minuto. Sem cartão de crédito, sem letras miúdas." },
-        { n: "02", title: "Registre ou importe", desc: "Adicione suas transações em segundos e veja tudo organizado automaticamente." },
-        { n: "03", title: "Decida com clareza", desc: "Receba insights e relatórios visuais para tomar decisões melhores todos os dias." },
+        { n: "01", title: "Cadastre-se", desc: "Crie sua conta em menos de um minuto, sem burocracia." },
+        { n: "02", title: "Adicione algumas transações", desc: "Registre manualmente ou importe um extrato para começar." },
+        { n: "03", title: "Visualize gráficos automáticos", desc: "A plataforma organiza tudo em painéis e gráficos claros." },
+        { n: "04", title: "Descubra padrões financeiros", desc: "Entenda hábitos e tendências que passariam despercebidos." },
+    ];
+
+    const explore = [
+        { icon: ICON.grid, label: "Dashboard" },
+        { icon: ICON.fileText, label: "Relatórios" },
+        { icon: ICON.flag, label: "Metas" },
+        { icon: ICON.tag, label: "Categorias" },
+        { icon: ICON.activity, label: "Indicadores" },
+        { icon: ICON.sliders, label: "Filtros" },
+        { icon: ICON.download, label: "Exportação" },
+        { icon: ICON.clock, label: "Histórico" },
+    ];
+
+    const results = [
+        "Maior consciência financeira",
+        "Melhor organização",
+        "Visualização intuitiva",
+        "Compreensão dos gastos",
+        "Tomada de decisão baseada em dados",
+        "Planejamento mais eficiente",
+    ];
+
+    const demoBullets = [
+        "Dashboard moderno",
+        "Gráficos interativos",
+        "Categorias automáticas",
+        "Indicadores",
+        "Filtros inteligentes",
     ];
 
     const faqs = [
-        { q: "A Finlumia é realmente gratuita?", a: "Sim. Você cria sua conta e usa os recursos essenciais sem pagar nada e sem cartão de crédito. Planos avançados são opcionais." },
-        { q: "Meus dados financeiros estão seguros?", a: "Totalmente. Usamos criptografia de ponta a ponta, e nunca compartilhamos ou vendemos suas informações para terceiros." },
-        { q: "Preciso conectar meu banco?", a: "Não é obrigatório. Você pode registrar manualmente ou importar extratos — você tem controle total sobre o que entra na plataforma." },
-        { q: "Posso cancelar quando quiser?", a: "Sim, em 1 clique e sem burocracia. Sem fidelidade e sem perguntas." },
+        { q: "A ferramenta é gratuita?", a: "Sim. Este é um projeto acadêmico, sem custos e sem cobrança — criado para fins de aprendizado e demonstração." },
+        { q: "Preciso conectar meu banco?", a: "Não. Você registra suas transações manualmente ou por importação de extrato, sem integração bancária." },
+        { q: "Posso cadastrar transações manualmente?", a: "Sim — essa é a forma principal de uso: adicione receitas e despesas em poucos cliques." },
+        { q: "Os dados ficam armazenados?", a: "Sim, de forma segura, apenas para o funcionamento da ferramenta durante o projeto." },
+        { q: "Qual o objetivo da plataforma?", a: "Demonstrar, na prática, conceitos de Interação Humano-Computador aplicados a um produto de finanças pessoais — clareza, simplicidade e visualização de dados." },
     ];
 
     const sectionWrap: React.CSSProperties = {
@@ -302,6 +449,8 @@ function MarketingSections({ theme }: SectionProps) {
         marginTop: "0.8rem", maxWidth: "56rem", lineHeight: 1.55,
     };
 
+    const centeredHead: React.CSSProperties = { textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" };
+
     const card: React.CSSProperties = {
         backgroundColor: surface,
         border: `1px solid ${border}`,
@@ -309,67 +458,183 @@ function MarketingSections({ theme }: SectionProps) {
         padding: "1.8rem",
     };
 
+    const iconBadge: React.CSSProperties = {
+        width: "4rem", height: "4rem", borderRadius: "1rem",
+        backgroundColor: iconBg, color: primary,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        marginBottom: "1.2rem",
+    };
+
     return (
         <div style={{ fontFamily: f.typography.fontFamily.base }}>
 
-            {/* ── Loss-aversion hook ───────────────────────────────── */}
-            <section style={{ ...sectionWrap, borderTop: `1px solid ${border}` }}>
-                <div style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" }}>
-                    <span style={eyebrow}>Você no controle</span>
-                    <h2 style={heading}>
-                        Pare de perder dinheiro com{" "}
-                        <span style={{ color: primary }}>gastos invisíveis</span>
-                    </h2>
-                    <p style={{ ...subheading, textAlign: "center" }}>
-                        A pessoa média desperdiça centenas de reais por mês sem perceber. A Finlumia transforma seus números em decisões claras — e devolve esse dinheiro para o seu bolso.
-                    </p>
-                </div>
+            {/* ── O que você consegue descobrir ────────────────────── */}
+            <section id="recursos" style={{ ...sectionWrap, borderTop: `1px solid ${border}` }}>
+                <Reveal>
+                    <div style={centeredHead}>
+                        <span style={eyebrow}>Clareza financeira</span>
+                        <h2 style={heading}>O que você consegue descobrir</h2>
+                        <p style={{ ...subheading, textAlign: "center" }}>
+                            Ferramentas simples para enxergar sua vida financeira com mais nitidez — sem jargões, sem complicação.
+                        </p>
+                    </div>
+                </Reveal>
 
-                {/* Features grid */}
-                <div className="grid-responsive" style={{ ["--grid-cols"]: "repeat(3, 1fr)", gap: "1.6rem", marginTop: "3rem" } as React.CSSProperties}>
-                    {features.map((feat) => (
-                        <div key={feat.title} style={card}>
-                            <div style={{
-                                width: "4rem", height: "4rem", borderRadius: "1rem",
-                                backgroundColor: isDark ? `${primary}22` : f.colors.feedback.infoBg,
-                                color: primary, display: "flex", alignItems: "center", justifyContent: "center",
-                                marginBottom: "1.2rem",
-                            }}>
-                                {feat.icon}
+                <div className={styles.discoverGrid} style={{ marginTop: "3rem" }}>
+                    {discoveries.map((item, i) => (
+                        <Reveal key={item.title} style={{ "--reveal-delay": `${i * 70}ms` } as React.CSSProperties}>
+                            <div style={card} className={styles.cardHover}>
+                                <div style={iconBadge}>{item.icon}</div>
+                                <h3 style={{ fontSize: "1.25rem", fontWeight: 700, color: f.colors.text.primary, marginBottom: "0.6rem" }}>{item.title}</h3>
+                                <p style={{ fontSize: "1rem", color: muted, lineHeight: 1.55 }}>{item.desc}</p>
                             </div>
-                            <h3 style={{ fontSize: "1.35rem", fontWeight: 700, color: f.colors.text.primary, marginBottom: "0.6rem" }}>{feat.title}</h3>
-                            <p style={{ fontSize: "1.05rem", color: muted, lineHeight: 1.55 }}>{feat.desc}</p>
-                        </div>
+                        </Reveal>
                     ))}
                 </div>
             </section>
 
-            {/* ── How it works ─────────────────────────────────────── */}
-            <section style={{ backgroundColor: isDark ? `${f.colors.bg.surface}66` : "rgba(255,255,255,0.5)", borderTop: `1px solid ${border}`, borderBottom: `1px solid ${border}` }}>
+            {/* ── Como funciona ─────────────────────────────────────── */}
+            <section id="como-funciona" style={{ backgroundColor: isDark ? `${f.colors.bg.surface}66` : "rgba(255,255,255,0.5)", borderTop: `1px solid ${border}`, borderBottom: `1px solid ${border}` }}>
                 <div style={sectionWrap}>
-                    <div style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" }}>
-                        <span style={eyebrow}>Simples assim</span>
-                        <h2 style={heading}>Comece em 3 passos</h2>
-                        <p style={{ ...subheading, textAlign: "center" }}>Sem complicação. Em minutos você já enxerga sua vida financeira com outros olhos.</p>
-                    </div>
-                    <div className="grid-responsive" style={{ ["--grid-cols"]: "repeat(3, 1fr)", gap: "1.6rem", marginTop: "3rem" } as React.CSSProperties}>
-                        {steps.map((step) => (
-                            <div key={step.n} style={{ ...card, position: "relative", overflow: "hidden" }}>
-                                <div style={{ fontSize: "3.2rem", fontWeight: 800, color: `${primary}26`, lineHeight: 1, marginBottom: "0.6rem" }}>{step.n}</div>
-                                <h3 style={{ fontSize: "1.35rem", fontWeight: 700, color: f.colors.text.primary, marginBottom: "0.6rem" }}>{step.title}</h3>
-                                <p style={{ fontSize: "1.05rem", color: muted, lineHeight: 1.55 }}>{step.desc}</p>
-                            </div>
+                    <Reveal>
+                        <div style={centeredHead}>
+                            <span style={eyebrow}>Simples de usar</span>
+                            <h2 style={heading}>Comece em poucos minutos</h2>
+                            <p style={{ ...subheading, textAlign: "center" }}>Quatro passos entre criar sua conta e visualizar sua primeira análise.</p>
+                        </div>
+                    </Reveal>
+
+                    <div className={styles.stepRow} style={{ marginTop: "3rem" }}>
+                        {steps.map((step, i) => (
+                            <React.Fragment key={step.n}>
+                                <Reveal style={{ flex: 1 }}>
+                                    <div style={card} className={styles.cardHover}>
+                                        <div style={{
+                                            width: "3.2rem", height: "3.2rem", borderRadius: "50%",
+                                            backgroundColor: primary, color: "#fff",
+                                            display: "flex", alignItems: "center", justifyContent: "center",
+                                            fontWeight: 700, fontSize: "1.1rem", marginBottom: "1rem",
+                                        }}>
+                                            {i + 1}
+                                        </div>
+                                        <h3 style={{ fontSize: "1.2rem", fontWeight: 700, color: f.colors.text.primary, marginBottom: "0.5rem" }}>{step.title}</h3>
+                                        <p style={{ fontSize: "0.98rem", color: muted, lineHeight: 1.5 }}>{step.desc}</p>
+                                    </div>
+                                </Reveal>
+                                {i < steps.length - 1 && (
+                                    <div className={styles.stepConnector} style={{ color: primary }}>{ICON.arrowRight}</div>
+                                )}
+                            </React.Fragment>
                         ))}
                     </div>
                 </div>
             </section>
 
-            {/* ── FAQ (objection handling / curiosity) ─────────────── */}
+            {/* ── O que você encontrará ─────────────────────────────── */}
             <section style={sectionWrap}>
-                <div style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", marginBottom: "3.2rem" }}>
-                    <span style={eyebrow}>Ainda com dúvidas?</span>
-                    <h2 style={heading}>Perguntas frequentes</h2>
+                <Reveal>
+                    <div style={centeredHead}>
+                        <span style={eyebrow}>Explore a plataforma</span>
+                        <h2 style={heading}>O que você encontrará</h2>
+                    </div>
+                </Reveal>
+
+                <div className={styles.exploreGrid} style={{ marginTop: "2.8rem" }}>
+                    {explore.map((item, i) => (
+                        <Reveal key={item.label} style={{ "--reveal-delay": `${i * 50}ms` } as React.CSSProperties}>
+                            <div style={{ ...card, textAlign: "center", padding: "1.6rem 1rem" }} className={styles.cardHover}>
+                                <div style={{ ...iconBadge, width: "3.2rem", height: "3.2rem", borderRadius: "0.8rem", margin: "0 auto 0.8rem" }}>
+                                    {item.icon}
+                                </div>
+                                <span style={{ fontSize: "1rem", fontWeight: 600, color: f.colors.text.primary }}>{item.label}</span>
+                            </div>
+                        </Reveal>
+                    ))}
                 </div>
+            </section>
+
+            {/* ── Resultados (qualitativos) ─────────────────────────── */}
+            <section style={{ backgroundColor: isDark ? `${f.colors.bg.surface}66` : "rgba(255,255,255,0.5)", borderTop: `1px solid ${border}`, borderBottom: `1px solid ${border}` }}>
+                <div style={sectionWrap}>
+                    <Reveal>
+                        <div style={centeredHead}>
+                            <span style={eyebrow}>Benefícios</span>
+                            <h2 style={heading}>Resultados que você percebe no dia a dia</h2>
+                        </div>
+                    </Reveal>
+
+                    <div className={styles.resultsGrid} style={{ marginTop: "2.8rem" }}>
+                        {results.map((label, i) => (
+                            <Reveal key={label} style={{ "--reveal-delay": `${i * 60}ms` } as React.CSSProperties}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "0.8rem", padding: "0.4rem 0" }}>
+                                    <span style={{ color: primary, flexShrink: 0 }}>{ICON.checkCircle}</span>
+                                    <span style={{ fontSize: "1.05rem", color: f.colors.text.primary, fontWeight: 500 }}>{label}</span>
+                                </div>
+                            </Reveal>
+                        ))}
+                    </div>
+                </div>
+            </section>
+
+            {/* ── Bloco de citação ───────────────────────────────────── */}
+            <Reveal>
+                <section style={{ ...sectionWrap, paddingTop: "clamp(2.4rem, 4vw, 3.6rem)", paddingBottom: "clamp(2.4rem, 4vw, 3.6rem)" }}>
+                    <div style={{
+                        backgroundColor: primary, borderRadius: "1.4rem",
+                        padding: "clamp(2rem, 4vw, 3.2rem)", display: "flex",
+                        flexWrap: "wrap", gap: "2rem", alignItems: "center", justifyContent: "space-between",
+                    }}>
+                        <p style={{ color: "#fff", fontSize: "clamp(1.15rem, 2vw, 1.5rem)", fontWeight: 600, lineHeight: 1.4, maxWidth: "38rem", margin: 0 }}>
+                            &ldquo;Quando entendemos nosso dinheiro, mudamos nossas escolhas e transformamos nosso futuro.&rdquo;
+                        </p>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.8rem" }}>
+                            {["Mais controle", "Mais tranquilidade", "Mais liberdade"].map((label) => (
+                                <span key={label} style={{ display: "flex", alignItems: "center", gap: "0.6rem", color: "#fff", fontSize: "1.05rem", fontWeight: 500 }}>
+                                    <CheckGlyph color="#ffffff" />
+                                    {label}
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                </section>
+            </Reveal>
+
+            {/* ── Demonstração ───────────────────────────────────────── */}
+            <section style={sectionWrap}>
+                <div className={styles.demoGrid}>
+                    <Reveal>
+                        <img
+                            src={heroImage}
+                            alt="Interface da Finlumia exibida em um notebook"
+                            className={styles.heroImage}
+                            style={{ width: "100%", height: "auto", display: "block" }}
+                        />
+                    </Reveal>
+                    <Reveal>
+                        <div>
+                            <span style={eyebrow}>Demonstração</span>
+                            <h2 style={heading}>Veja a Finlumia em ação</h2>
+                            <ul style={{ listStyle: "none", padding: 0, margin: "1.6rem 0 0", display: "flex", flexDirection: "column", gap: "1rem" }}>
+                                {demoBullets.map((label) => (
+                                    <li key={label} style={{ display: "flex", alignItems: "center", gap: "0.8rem" }}>
+                                        <span style={{ color: primary, flexShrink: 0 }}>{ICON.checkCircle}</span>
+                                        <span style={{ fontSize: "1.1rem", color: f.colors.text.primary, fontWeight: 500 }}>{label}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    </Reveal>
+                </div>
+            </section>
+
+            {/* ── FAQ ────────────────────────────────────────────────── */}
+            <section id="faq" style={sectionWrap}>
+                <Reveal>
+                    <div style={{ ...centeredHead, marginBottom: "3.2rem" }}>
+                        <span style={eyebrow}>Ainda com dúvidas?</span>
+                        <h2 style={heading}>Perguntas frequentes</h2>
+                    </div>
+                </Reveal>
                 <div style={{ maxWidth: "76rem", margin: "0 auto", display: "flex", flexDirection: "column", gap: "1rem" }}>
                     {faqs.map((item, i) => {
                         const open = openFaq === i;
@@ -397,50 +662,73 @@ function MarketingSections({ theme }: SectionProps) {
                 </div>
             </section>
 
-            {/* ── Final CTA ────────────────────────────────────────── */}
-            <section style={{ ...sectionWrap, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" }}>
-                <h2 style={{ ...heading, fontSize: "clamp(1.85rem, 3vw, 2.6rem)" }}>
-                    Seu dinheiro merece <span style={{ color: primary }}>clareza</span>.
-                </h2>
-                <p style={{ ...subheading, textAlign: "center" }}>
-                    Organize suas finanças, acompanhe seus gastos e tome decisões com mais segurança. Comece grátis hoje — seu eu do futuro agradece.
-                </p>
-                <div style={{ display: "flex", gap: "1.2rem", flexWrap: "wrap", justifyContent: "center", marginTop: "2.4rem" }}>
-                    <button
-                        type="button"
-                        onClick={() => router.push("/register")}
-                        style={{
-                            backgroundColor: primary, color: "#fff", border: "none",
-                            borderRadius: "0.8rem", padding: "0 2rem", height: "4.4rem",
-                            fontSize: "1.05rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
-                            boxShadow: `0 10px 28px ${primary}40`,
-                        }}
-                    >
-                        Criar conta grátis
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => router.push("/login")}
-                        style={{
-                            backgroundColor: "transparent", color: f.colors.text.primary,
-                            border: `1px solid ${border}`, borderRadius: "0.8rem",
-                            padding: "0 2rem", height: "4.4rem", fontSize: "1.05rem",
-                            fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
-                        }}
-                    >
-                        Já tenho conta
-                    </button>
-                </div>
-                <p style={{ fontSize: "0.95rem", color: muted, marginTop: "1.2rem" }}>
-                    Grátis para sempre no plano essencial · Sem cartão de crédito · Cancele quando quiser
-                </p>
-            </section>
+            {/* ── CTA final ────────────────────────────────────────── */}
+            <Reveal>
+                <section style={{ ...sectionWrap, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" }}>
+                    <h2 style={{ ...heading, fontSize: "clamp(1.85rem, 3vw, 2.6rem)" }}>
+                        Comece a entender melhor <span style={{ color: primary }}>seu dinheiro</span>.
+                    </h2>
+                    <p style={{ ...subheading, textAlign: "center" }}>
+                        A Finlumia foi desenvolvida para facilitar a visualização dos seus dados financeiros e auxiliar no processo de tomada de decisão através de uma interface simples e intuitiva.
+                    </p>
+                    <div style={{ display: "flex", gap: "1.2rem", flexWrap: "wrap", justifyContent: "center", marginTop: "2.4rem" }}>
+                        <button
+                            type="button"
+                            onClick={() => router.push("/register")}
+                            className={styles.ctaButton}
+                            style={{
+                                backgroundColor: primary, color: "#fff", border: "none",
+                                borderRadius: "0.8rem", padding: "0 2rem", height: "4.4rem",
+                                fontSize: "1.05rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                            }}
+                        >
+                            Explorar ferramenta
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => scrollToId("recursos")}
+                            className={styles.ctaButton}
+                            style={{
+                                backgroundColor: "transparent", color: f.colors.text.primary,
+                                border: `1px solid ${border}`, borderRadius: "0.8rem",
+                                padding: "0 2rem", height: "4.4rem", fontSize: "1.05rem",
+                                fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                            }}
+                        >
+                            Conhecer recursos
+                        </button>
+                    </div>
+                </section>
+            </Reveal>
 
             {/* ── Footer ───────────────────────────────────────────── */}
-            <footer style={{ borderTop: `1px solid ${border}`, padding: "2.4rem 1.6rem", textAlign: "center" }}>
-                <div style={{ fontSize: "1.25rem", fontWeight: 700, color: primary, letterSpacing: "0.05em", marginBottom: "0.4rem" }}>FINLUMIA</div>
-                <p style={{ fontSize: "0.95rem", color: muted }}>© {new Date().getFullYear()} Finlumia · Clareza financeira para decisões mais inteligentes</p>
+            <footer style={{ borderTop: `1px solid ${border}`, padding: "3.2rem 1.6rem 2.4rem" }}>
+                <div style={{ maxWidth: "120rem", margin: "0 auto", display: "flex", flexWrap: "wrap", gap: "1.6rem 3.2rem", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div style={{ fontSize: "1.25rem", fontWeight: 700, color: primary, letterSpacing: "0.05em" }}>FINLUMIA</div>
+                    <nav style={{ display: "flex", flexWrap: "wrap", gap: "1.2rem 2rem" }}>
+                        <button type="button" onClick={() => scrollToId("recursos")} style={footerLinkStyle(primary)}>Recursos</button>
+                        <button type="button" onClick={() => router.push("/dashboard/support/documentation/technical")} style={footerLinkStyle(primary)}>Documentação</button>
+                        <span style={footerTextStyle(muted)}>GitHub</span>
+                        <span style={footerTextStyle(muted)}>Contato</span>
+                        <span style={footerTextStyle(muted)}>Projeto Acadêmico</span>
+                        <span style={footerTextStyle(muted)}>Política de Privacidade</span>
+                    </nav>
+                </div>
+                <p style={{ fontSize: "0.95rem", color: muted, textAlign: "center", marginTop: "2.4rem" }}>
+                    © {new Date().getFullYear()} Finlumia · Clareza financeira para decisões mais inteligentes
+                </p>
             </footer>
         </div>
     );
+}
+
+function footerLinkStyle(color: string): React.CSSProperties {
+    return {
+        background: "none", border: "none", padding: 0, cursor: "pointer",
+        fontFamily: "inherit", fontSize: "0.95rem", fontWeight: 500, color,
+    };
+}
+
+function footerTextStyle(color: string): React.CSSProperties {
+    return { fontSize: "0.95rem", color };
 }

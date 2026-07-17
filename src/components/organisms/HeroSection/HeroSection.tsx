@@ -15,6 +15,7 @@ export function HeroSection({
     previewImage,
     primaryAction,
     secondaryAction,
+    belowActions,
     styles: stylesConfig,
     textStyles,
 }: HeroSectionProps) {
@@ -100,6 +101,7 @@ export function HeroSection({
                             {secondaryAction && <Button {...secondaryAction} theme={secondaryAction.theme ?? theme} />}
                         </div>
                     )}
+                    {belowActions}
                 </div>
 
                 <div className={styles.imageWrap}>

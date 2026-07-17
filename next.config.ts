@@ -9,8 +9,13 @@ const staticSecurityHeaders = [
   { key: "Referrer-Policy",              value: "strict-origin-when-cross-origin" },
   { key: "Permissions-Policy",           value: "camera=(), microphone=(), geolocation=()" },
   { key: "Strict-Transport-Security",    value: "max-age=63072000; includeSubDomains; preload" },
-  // Proteção contra ataques de timing e vazamentos cross-origin
-  { key: "Cross-Origin-Opener-Policy",   value: "same-origin" },
+  // Proteção contra ataques de timing e vazamentos cross-origin.
+  // "same-origin" (em vez de allow-popups) quebra o login com Google: o Google
+  // Identity Services abre uma popup pra escolha de conta, e o navegador isola
+  // o contexto dela da página principal, então a resposta nunca volta e o
+  // login trava. "same-origin-allow-popups" mantém o isolamento contra outras
+  // origens mas permite a comunicação com popups abertas pela própria página.
+  { key: "Cross-Origin-Opener-Policy",   value: "same-origin-allow-popups" },
   { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
   { key: "X-DNS-Prefetch-Control",       value: "off" },
 ];

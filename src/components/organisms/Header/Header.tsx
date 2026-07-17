@@ -99,6 +99,8 @@ export function Header({
     const centerGroupStyle: React.CSSProperties = {
         ...groupStyle,
         gap: styleHeader?.centerGap ?? "2.4rem",
+        flexWrap: "wrap",
+        justifyContent: "center",
     };
 
     const rightGroupStyle: React.CSSProperties = {

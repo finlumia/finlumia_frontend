@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { parseMoney } from "../../../lib/money";
+import { parseMoney, maskCurrencyInput } from "../../../lib/money";
 import { Modal } from "../../organisms/Modal";
 import { Input } from "../../atoms/input";
 import { Button } from "../../atoms/button";
@@ -318,7 +318,7 @@ export function BudgetPage() {
                         id="budget-amount" name="amount" label="Limite do período (R$)"
                         type="text" placeholder="0,00" value={form.amount}
                         theme={theme} required error={errors.amount}
-                        onChange={(e) => setForm((p) => ({ ...p, amount: e.target.value }))}
+                        onChange={(e) => setForm((p) => ({ ...p, amount: maskCurrencyInput(e.target.value) }))}
                     />
 
                     <div>
