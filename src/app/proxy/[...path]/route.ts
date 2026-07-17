@@ -16,6 +16,9 @@ const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 const HOP_BY_HOP = new Set([
   "connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
   "te", "trailers", "transfer-encoding", "upgrade", "host", "cookie",
+  // Chamada proxy→backend é server-to-server, não uma requisição de navegador.
+  // Repassar o Origin do navegador faz o CORS do backend rejeitar sem necessidade.
+  "origin",
 ]);
 
 const STRIP_RESPONSE = new Set(["www-authenticate"]);
