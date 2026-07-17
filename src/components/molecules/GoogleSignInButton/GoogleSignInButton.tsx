@@ -130,7 +130,13 @@ export function GoogleSignInButton({ children, onCredential, onError, disabled }
       <Script
         src="https://accounts.google.com/gsi/client"
         strategy="afterInteractive"
-        onLoad={() => setScriptLoaded(true)}
+        // onReady (não onLoad): onLoad só dispara uma vez por sessão, na
+        // primeira página que carrega o script. Se o usuário chegar aqui via
+        // navegação client-side depois de já ter visitado outra tela com
+        // este mesmo botão (ex.: Login → Cadastro), o script já está
+        // carregado e onLoad nunca dispara de novo — onReady dispara em
+        // toda montagem do componente, mesmo com o script já em cache.
+        onReady={() => setScriptLoaded(true)}
         onError={() => setScriptFailed(true)}
       />
     </div>

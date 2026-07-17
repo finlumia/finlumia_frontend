@@ -708,10 +708,11 @@ function MarketingSections({ theme }: SectionProps) {
                     <nav style={{ display: "flex", flexWrap: "wrap", gap: "1.2rem 2rem" }}>
                         <button type="button" onClick={() => scrollToId("recursos")} style={footerLinkStyle(primary)}>Recursos</button>
                         <button type="button" onClick={() => router.push("/dashboard/support/documentation/technical")} style={footerLinkStyle(primary)}>Documentação</button>
+                        <button type="button" onClick={() => router.push("/terms")} style={footerLinkStyle(primary)}>Termos de Uso</button>
+                        <button type="button" onClick={() => router.push("/privacy")} style={footerLinkStyle(primary)}>Política de Privacidade</button>
                         <span style={footerTextStyle(muted)}>GitHub</span>
                         <span style={footerTextStyle(muted)}>Contato</span>
                         <span style={footerTextStyle(muted)}>Projeto Acadêmico</span>
-                        <span style={footerTextStyle(muted)}>Política de Privacidade</span>
                     </nav>
                 </div>
                 <p style={{ fontSize: "0.95rem", color: muted, textAlign: "center", marginTop: "2.4rem" }}>

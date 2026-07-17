@@ -290,9 +290,9 @@ export function LoginPage() {
 
                 <p style={{ textAlign: "center", marginTop: "2rem", fontSize: "1.1rem", color: mutedColor }}>
                     Ao entrar, você concorda com nossos{" "}
-                    <span style={{ color: primaryColor, cursor: "pointer" }}>Termos de Uso</span>{" "}
+                    <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: primaryColor, fontWeight: 600 }}>Termos de Uso</a>{" "}
                     e{" "}
-                    <span style={{ color: primaryColor, cursor: "pointer" }}>Política de Privacidade</span>.
+                    <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: primaryColor, fontWeight: 600 }}>Política de Privacidade</a>.
                 </p>
             </div>
         </div>

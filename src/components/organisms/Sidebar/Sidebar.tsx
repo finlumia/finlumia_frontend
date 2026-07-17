@@ -16,6 +16,11 @@ import { useAuth } from "../../../contexts/auth.context";
 // quem não é admin.
 const ADMIN_ONLY_NAV_IDS = new Set(["configurator"]);
 
+// Itens filhos visíveis só para admin/gerente — mesma regra de acesso
+// aplicada dentro da própria página (ver SupportPortalPage.tsx). Fica oculto
+// do menu para usuário final, que só veria a tela de "Acesso restrito".
+const MANAGER_ONLY_CHILD_NAV_IDS = new Set(["support-portal"]);
+
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type ChildItem = {
@@ -276,6 +281,7 @@ export function Sidebar({
     const { theme: contextTheme, toggleTheme } = useTheme();
     const { user: authUser } = useAuth();
     const isAdmin = authUser?.role === "admin";
+    const canAccessSupportPortal = isAdmin || authUser?.role === "gerente";
 
     // Use context theme for toggles; prop theme for rendering (they are always in sync)
     const theme = contextTheme ?? themeProp;
@@ -288,7 +294,14 @@ export function Sidebar({
     const groups = allGroups
         .map((group) => ({
             ...group,
-            items: group.items.filter((item) => isAdmin || !ADMIN_ONLY_NAV_IDS.has(item.id)),
+            items: group.items
+                .filter((item) => isAdmin || !ADMIN_ONLY_NAV_IDS.has(item.id))
+                .map((item) => ({
+                    ...item,
+                    children: item.children.filter(
+                        (child) => canAccessSupportPortal || !MANAGER_ONLY_CHILD_NAV_IDS.has(child.id),
+                    ),
+                })),
         }))
         .filter((group) => group.items.length > 0);
 

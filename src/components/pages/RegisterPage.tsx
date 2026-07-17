@@ -322,8 +322,8 @@ export function RegisterPage() {
                             />
                             <span style={{ fontSize: "1.25rem", color: mutedColor, lineHeight: 1.45 }}>
                                 Li e aceito os{" "}
-                                <span style={{ color: primaryColor }}>Termos de Uso</span> e a{" "}
-                                <span style={{ color: primaryColor }}>Política de Privacidade</span>.
+                                <a href="/terms" target="_blank" rel="noopener noreferrer" style={{ color: primaryColor, fontWeight: 600 }}>Termos de Uso</a> e a{" "}
+                                <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: primaryColor, fontWeight: 600 }}>Política de Privacidade</a>.
                             </span>
                         </label>
                         {errors.accepted && (
