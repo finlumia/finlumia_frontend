@@ -61,8 +61,8 @@ async function request<T>(url: string, options: RequestOptions = {}): Promise<T>
   }
 
   if (!res.ok) {
-    const payload = await parseBody(res).catch(() => null);
-    throw payload ?? { message: `Erro ${res.status}: ${res.statusText}` };
+    const payload = await parseBody<{ message?: string } | null>(res).catch(() => null);
+    throw { status: res.status, ...(payload ?? { message: `Erro ${res.status}: ${res.statusText}` }) };
   }
 
   return parseBody<T>(res);

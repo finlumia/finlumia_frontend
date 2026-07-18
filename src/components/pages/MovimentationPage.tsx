@@ -145,9 +145,23 @@ export function MovimentationPage() {
             notes: tx.notes,
         };
         if (editingTx) {
-            const updated = await transactionsService.update(editingTx.id, req);
-            updateTransaction(editingTx.id, updated as unknown as Transaction);
-            setEditingTx(null);
+            try {
+                const updated = await transactionsService.update(editingTx.id, req);
+                updateTransaction(editingTx.id, updated as unknown as Transaction);
+                setEditingTx(null);
+            } catch (err) {
+                // Lançamento pode ter sido excluído/alterado em outra sessão desde que a
+                // lista foi carregada — sem isso, o usuário ficava preso tentando salvar
+                // um id que o backend não reconhece mais, sempre recebendo o mesmo 404.
+                if ((err as { status?: number }).status === 404) {
+                    removeTransaction(editingTx.id);
+                    setEditingTx(null);
+                    setApiError("Este lançamento não foi encontrado — pode ter sido removido. A lista foi atualizada.");
+                    refreshTransactions();
+                    return;
+                }
+                throw err;
+            }
             return;
         }
 
@@ -180,6 +194,14 @@ export function MovimentationPage() {
             removeTransaction(id);
             setSelected((prev) => { const s = new Set(prev); s.delete(id); return s; });
         } catch (err: unknown) {
+            // 404 aqui significa que o lançamento já não existe no backend — remove
+            // localmente também para não deixar uma linha "fantasma" na tabela.
+            if ((err as { status?: number })?.status === 404) {
+                removeTransaction(id);
+                setSelected((prev) => { const s = new Set(prev); s.delete(id); return s; });
+                setApiError("Este lançamento já havia sido removido. A lista foi atualizada.");
+                return;
+            }
             setApiError((err as { message?: string })?.message ?? "Erro ao excluir transação.");
         }
     };

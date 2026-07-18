@@ -1,0 +1,83 @@
+/* Barra de navegação inferior — somente celular (ver breakpoint abaixo).
+   Tablet (768–1023px) e desktop (>=1024px) continuam com a Sidebar/topbar
+   existente; este componente fica completamente oculto nessas larguras. */
+.bottomNav {
+    display: none;
+}
+
+@media (max-width: 767px) {
+    .bottomNav {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        align-items: stretch;
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: calc(6.4rem + env(safe-area-inset-bottom, 0px));
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+        border-top-width: 1px;
+        border-top-style: solid;
+        backdrop-filter: saturate(180%) blur(8px);
+        z-index: 90;
+    }
+}
+
+.tab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.4rem 0.2rem;
+    font-family: inherit;
+    transition: color 0.15s ease;
+}
+
+.tabIcon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    flex-shrink: 0;
+}
+
+.tabLabel {
+    font-size: 1.0rem;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+/* Slot central: mantém as 5 colunas alinhadas mesmo quando o botão
+   de nova movimentação some (ex: já está na tela de transações). */
+.fabSlot {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+}
+
+.fabButton {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 5rem;
+    height: 5rem;
+    margin-top: -2.2rem;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.fabButton:active {
+    transform: scale(0.96);
+}

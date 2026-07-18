@@ -11,6 +11,8 @@ import type {
 } from "../../api/types";
 import { getFoundationByTheme } from "../../shared/styles/tokens";
 import { useTheme } from "../../shared/styles/theme.context";
+import { PeriodPicker } from "../organisms/PeriodPicker";
+import { currentMonthPeriod, type DatePeriod } from "../../shared/finance/period.utils";
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -168,8 +170,7 @@ export function ReportsPage() {
     const f = getFoundationByTheme(theme);
     const isDark = theme === "dark";
     const [period, setPeriod] = useState<Period>("6m");
-    const [customStart, setCustomStart] = useState("");
-    const [customEnd, setCustomEnd] = useState("");
+    const [customPeriod, setCustomPeriod] = useState<DatePeriod>(currentMonthPeriod());
     const [categoryType, setCategoryType] = useState<CategoryType>("despesa");
     const [view, setView] = useState<ReportView>("geral");
     const [isLoading, setIsLoading] = useState(true);
@@ -186,7 +187,8 @@ export function ReportsPage() {
     // Filtro personalizado: só dispara a busca quando as duas datas estão
     // preenchidas e a inicial não é depois da final (evita chamadas inválidas
     // a cada tecla digitada no seletor de data).
-    const customRangeReady = period !== "custom" || (!!customStart && !!customEnd && customStart <= customEnd);
+    const customRangeReady = period !== "custom"
+        || (!!customPeriod.start && !!customPeriod.end && customPeriod.start <= customPeriod.end);
 
     const load = useCallback(async (p: Period, categoryFilterType: CategoryType, start: string, end: string) => {
         setIsLoading(true);
@@ -219,8 +221,8 @@ export function ReportsPage() {
 
     useEffect(() => {
         if (!customRangeReady) return;
-        load(period, categoryType, customStart, customEnd);
-    }, [period, categoryType, customStart, customEnd, customRangeReady, load]);
+        load(period, categoryType, customPeriod.start, customPeriod.end);
+    }, [period, categoryType, customPeriod, customRangeReady, load]);
 
     const xLabels = cashFlow.map((d) => d.month);
 
@@ -288,42 +290,20 @@ export function ReportsPage() {
                     </div>
                 </div>
 
-                {/* Filtro personalizado: aparece só quando "Personalizado" está selecionado */}
+                {/* Filtro personalizado: aparece só quando "Personalizado" está selecionado.
+                    Mesmo PeriodPicker usado no Orçamento — calendário responsivo em vez de
+                    dois <input type="date"> soltos, que ficavam ruins de usar no celular. */}
                 {period === "custom" && (
-                    <div style={{ display: "flex", alignItems: "flex-end", gap: "1rem", flexWrap: "wrap", marginTop: "1.2rem" }}>
-                        <label style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-                            <span style={{ fontSize: "1.1rem", color: muted }}>De</span>
-                            <input
-                                type="date"
-                                value={customStart}
-                                max={customEnd || undefined}
-                                onChange={(e) => setCustomStart(e.target.value)}
-                                style={{
-                                    height: "3.6rem", padding: "0 1rem", borderRadius: "0.6rem",
-                                    border: `1px solid ${border}`, backgroundColor: isDark ? f.colors.bg.elevated : "#fff",
-                                    color: f.colors.text.primary, fontSize: "1.3rem", fontFamily: "inherit",
-                                }}
-                            />
-                        </label>
-                        <label style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-                            <span style={{ fontSize: "1.1rem", color: muted }}>Até</span>
-                            <input
-                                type="date"
-                                value={customEnd}
-                                min={customStart || undefined}
-                                onChange={(e) => setCustomEnd(e.target.value)}
-                                style={{
-                                    height: "3.6rem", padding: "0 1rem", borderRadius: "0.6rem",
-                                    border: `1px solid ${border}`, backgroundColor: isDark ? f.colors.bg.elevated : "#fff",
-                                    color: f.colors.text.primary, fontSize: "1.3rem", fontFamily: "inherit",
-                                }}
-                            />
-                        </label>
-                        {!customRangeReady && (
-                            <span style={{ fontSize: "1.2rem", color: muted, alignSelf: "center" }}>
-                                Escolha as duas datas (inicial antes da final) para carregar o período personalizado.
-                            </span>
-                        )}
+                    <div style={{
+                        marginTop: "1.2rem", padding: "1.6rem", borderRadius: "1rem",
+                        border: `1px solid ${border}`, backgroundColor: isDark ? f.colors.bg.elevated : "#fff",
+                    }}>
+                        <PeriodPicker
+                            value={customPeriod}
+                            onChange={setCustomPeriod}
+                            theme={theme}
+                            error={!customRangeReady ? "Escolha as duas datas (inicial antes da final) para carregar o período personalizado." : undefined}
+                        />
                     </div>
                 )}
             </div>

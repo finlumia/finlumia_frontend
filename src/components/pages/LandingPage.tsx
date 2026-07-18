@@ -9,6 +9,7 @@ import type { TextStyleConfig } from "../atoms/text";
 import type { ButtonStyleConfig } from "../atoms/button";
 import { getFoundationByTheme } from "../../shared/styles/tokens";
 import { useTheme } from "../../shared/styles/theme.context";
+import { useAuth } from "../../contexts/auth.context";
 import styles from "./LandingPage.module.css";
 
 const finlumiaIcon = "/assets/icone_finlumia.svg";
@@ -32,6 +33,12 @@ export function LandingPage() {
     const router = useRouter();
     const { theme } = useTheme();
     const foundation = getFoundationByTheme(theme);
+    const { isAuthenticated } = useAuth();
+
+    // Quem já tem conta clica em "Acessar ferramenta" esperando entrar — não se
+    // cadastrar de novo. Loga direto pro dashboard se a sessão já existe;
+    // senão manda pro login (que já linka pra "criar conta").
+    const handleAccessTool = () => router.push(isAuthenticated ? "/dashboard" : "/login");
 
     const textLogoStyle: TextStyleConfig = {
         backgroudColor: "transparent",
@@ -149,7 +156,7 @@ export function LandingPage() {
                                 variant: "primary",
                                 size: "md",
                                 styleConfig: primaryButtonStyle,
-                                onClick: () => router.push("/register"),
+                                onClick: handleAccessTool,
                             },
                         },
                     ]}
@@ -172,7 +179,7 @@ export function LandingPage() {
                         theme,
                         variant: "primary",
                         size: "md",
-                        onClick: () => router.push("/register"),
+                        onClick: handleAccessTool,
                         styleConfig: {
                             ...primaryButtonStyle,
                             padding: "0 var(--button-padding-inline)",

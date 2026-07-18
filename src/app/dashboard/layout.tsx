@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Sidebar } from "../../components/organisms/Sidebar";
+import { BottomNav } from "../../components/organisms/BottomNav";
 import { useTheme } from "../../shared/styles/theme.context";
 import { getFoundationByTheme } from "../../shared/styles/tokens";
 import { FinanceProvider } from "../../shared/finance/finance.context";
@@ -49,6 +50,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         : { name: "", email: "" };
 
     const sidebarWidth = collapsed ? "6.4rem" : "24rem";
+    const showNewTransaction = pathname !== "/dashboard/movimentation/transactions";
 
     if (isLoading || !isAuthenticated) {
         return (
@@ -139,8 +141,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             {/* Atalho global: cadastro de transação exige vários cliques (Movimentações
                 > Transações > Nova movimentação) — o FAB abre o formulário de qualquer
                 tela do dashboard. Some na própria página de transações, que já tem o
-                botão "+ Nova movimentação" no cabeçalho. */}
-            {pathname !== "/dashboard/movimentation/transactions" && (
+                botão "+ Nova movimentação" no cabeçalho. Em telas de celular esse
+                atalho vive dentro do BottomNav (botão central), então o FAB solto
+                fica oculto ali via CSS — ver dashboard.module.css. */}
+            {showNewTransaction && (
                 <button
                     type="button"
                     onClick={() => router.push("/dashboard/movimentation/transactions?new=1")}
@@ -154,6 +158,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     </svg>
                 </button>
             )}
+
+            <BottomNav
+                theme={theme}
+                onOpenMore={() => setMobileOpen(true)}
+                showNewTransaction={showNewTransaction}
+            />
         </div>
             <TourOverlay />
         </FinanceProvider>

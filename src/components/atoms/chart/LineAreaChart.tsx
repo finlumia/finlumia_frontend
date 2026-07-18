@@ -61,8 +61,12 @@ export function LineAreaChart({ series, labels, theme = "dark", formatY }: LineA
     const rawMin = Math.min(...allValues);
     const rawMax = Math.max(...allValues);
     const padding = (rawMax - rawMin) * 0.1 || 1000;
-    const min = Math.max(0, rawMin - padding);
+    // Só ancora o eixo em 0 quando os dados são todos não-negativos — forçar
+    // min=0 com saldo/patrimônio negativo empurrava a parte negativa da linha
+    // para fora da área visível (o card corta com overflow: hidden).
+    const min = rawMin >= 0 ? Math.max(0, rawMin - padding) : rawMin - padding;
     const max = rawMax + padding;
+    const showZeroLine = min < 0 && max > 0;
 
     const n = labels.length;
     const fmt = formatY ?? ((v: number) =>
@@ -133,6 +137,28 @@ export function LineAreaChart({ series, labels, theme = "dark", formatY }: LineA
                     x2={PAD.left + PW} y2={PAD.top + PH}
                     stroke={gridColor} strokeWidth="1"
                 />
+
+                {/* Linha de zero — destacada quando os valores cruzam de positivo pra negativo,
+                    pra deixar claro onde termina um e começa o outro. */}
+                {showZeroLine && (() => {
+                    const y = toY(0, min, max);
+                    return (
+                        <g>
+                            <line
+                                x1={PAD.left} y1={y} x2={PAD.left + PW} y2={y}
+                                stroke={axisColor} strokeWidth="1.2" strokeDasharray="5 3"
+                            />
+                            <text
+                                x={PAD.left - 6} y={y + 4}
+                                textAnchor="end"
+                                fontSize="11" fontWeight={700} fill={axisColor}
+                                fontFamily="inherit"
+                            >
+                                {fmt(0)}
+                            </text>
+                        </g>
+                    );
+                })()}
 
                 {/* Areas */}
                 {series.map((s, si) =>
