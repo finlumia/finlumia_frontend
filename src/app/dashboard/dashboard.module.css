@@ -107,6 +107,15 @@
     transition: background-color 0.15s ease;
 }
 
+/* No celular a navegação e o acesso ao drawer completo vivem no BottomNav
+   (aba "Mais" -> /dashboard/more), então o hambúrguer some — fica só para
+   tablet, onde não existe BottomNav. */
+@media (max-width: 767px) {
+    .menuButton {
+        display: none;
+    }
+}
+
 .menuButton:hover {
     background-color: rgba(128, 128, 128, 0.15);
 }

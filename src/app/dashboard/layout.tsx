@@ -159,11 +159,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </button>
             )}
 
-            <BottomNav
-                theme={theme}
-                onOpenMore={() => setMobileOpen(true)}
-                showNewTransaction={showNewTransaction}
-            />
+            <BottomNav theme={theme} />
         </div>
             <TourOverlay />
         </FinanceProvider>

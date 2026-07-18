@@ -53,13 +53,13 @@ const TABS: TabItem[] = [
     { id: "reports", label: "Relatórios", icon: "BarChart3", href: "/dashboard/reports", exact: false },
 ];
 
+const MORE_HREF = "/dashboard/more";
+
 type BottomNavProps = {
     theme?: ThemeMode;
-    onOpenMore: () => void;
-    showNewTransaction: boolean;
 };
 
-export function BottomNav({ theme = "light", onOpenMore, showNewTransaction }: BottomNavProps) {
+export function BottomNav({ theme = "light" }: BottomNavProps) {
     const pathname = usePathname();
     const router = useRouter();
     const f = getFoundationByTheme(theme);
@@ -68,7 +68,7 @@ export function BottomNav({ theme = "light", onOpenMore, showNewTransaction }: B
     const isTabActive = (tab: TabItem) =>
         tab.exact ? pathname === tab.href : pathname.startsWith(tab.href);
 
-    const isMoreActive = !TABS.some(isTabActive);
+    const isMoreActive = pathname.startsWith(MORE_HREF);
 
     return (
         <nav
@@ -96,22 +96,18 @@ export function BottomNav({ theme = "light", onOpenMore, showNewTransaction }: B
                 );
             })}
 
-            {showNewTransaction ? (
-                <div className={styles.fabSlot}>
-                    <button
-                        type="button"
-                        className={styles.fabButton}
-                        style={{ backgroundColor: f.colors.brand.primary, color: "#fff" }}
-                        onClick={() => router.push("/dashboard/movimentation/transactions?new=1")}
-                        aria-label="Nova movimentação"
-                        title="Nova movimentação"
-                    >
-                        {ICONS.Plus}
-                    </button>
-                </div>
-            ) : (
-                <div className={styles.fabSlot} aria-hidden="true" />
-            )}
+            <div className={styles.fabSlot}>
+                <button
+                    type="button"
+                    className={styles.fabButton}
+                    style={{ backgroundColor: f.colors.brand.primary, color: "#fff" }}
+                    onClick={() => router.push("/dashboard/movimentation/transactions?new=1")}
+                    aria-label="Nova movimentação"
+                    title="Nova movimentação"
+                >
+                    {ICONS.Plus}
+                </button>
+            </div>
 
             {TABS.slice(2).map((tab) => {
                 const active = isTabActive(tab);
@@ -134,7 +130,8 @@ export function BottomNav({ theme = "light", onOpenMore, showNewTransaction }: B
                 type="button"
                 className={styles.tab}
                 style={{ color: isMoreActive ? f.colors.brand.primary : f.colors.text.muted }}
-                onClick={onOpenMore}
+                onClick={() => router.push(MORE_HREF)}
+                aria-current={isMoreActive ? "page" : undefined}
                 aria-label="Mais opções"
             >
                 <span className={styles.tabIcon}>{ICONS.MoreHorizontal}</span>
