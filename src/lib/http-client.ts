@@ -38,6 +38,9 @@ async function request<T>(url: string, options: RequestOptions = {}): Promise<T>
   const res = await fetchWithTimeout(url, {
     ...init,
     credentials: "same-origin",
+    // Dados dinâmicos por usuário — nunca deixar o navegador (ou um cache
+    // intermediário) servir uma resposta antiga depois de um create/update.
+    cache: "no-store",
     headers: { "Content-Type": "application/json", ...extra },
   });
 

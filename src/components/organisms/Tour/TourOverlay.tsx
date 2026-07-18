@@ -165,6 +165,8 @@ export function TourOverlay() {
                         ...cardBase,
                         maxWidth: "48rem",
                         width: "calc(100vw - 3.2rem)",
+                        maxHeight: "calc(100vh - 3.2rem)",
+                        overflowY: "auto",
                         padding: "4.8rem 4rem",
                         transform: opacity === 1 ? "scale(1)" : "scale(0.94)",
                         textAlign: "center",
@@ -231,13 +233,22 @@ export function TourOverlay() {
                     <div style={{
                         ...cardBase,
                         position: "fixed",
-                        top: rect ? safeTop : vh / 2 - estimatedTooltipH / 2,
+                        // Sem alvo (fallback centralizado): centraliza pela altura REAL do
+                        // cartão via CSS (top:50% + translateY(-50%)) em vez de uma estimativa
+                        // fixa — passos com mais dicas (ex.: Movimentações, Suporte) renderizam
+                        // bem mais altos que `estimatedTooltipH` e, com a estimativa, o cartão
+                        // acabava nascendo fora da viewport em celular (botões inalcançáveis).
+                        top: rect ? safeTop : "50%",
                         left: rect ? anchoredLeft : "50%",
                         transform: !rect
-                            ? `translateX(-50%) ${opacity === 1 ? "scale(1)" : "scale(0.94)"}`
+                            ? `translate(-50%, -50%) ${opacity === 1 ? "scale(1)" : "scale(0.94)"}`
                             : opacity === 1 ? "scale(1)" : "scale(0.96)",
                         width: tooltipW,
                         maxWidth: `calc(100vw - ${VIEWPORT_MARGIN * 2}px)`,
+                        // Segurança para qualquer combinação de altura de conteúdo/viewport —
+                        // rola dentro do cartão em vez de vazar por baixo da tela.
+                        maxHeight: `calc(100vh - ${VIEWPORT_MARGIN * 2}px)`,
+                        overflowY: "auto",
                         padding: "2.4rem",
                     }}>
                         {/* Arrow pointing left toward spotlight */}

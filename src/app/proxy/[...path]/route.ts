@@ -1,5 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 
+// Este proxy repassa dados dinâmicos e autenticados por cookie — o Next.js
+// App Router, por padrão, tenta cachear (Data Cache) chamadas `fetch` feitas
+// em route handlers. Sem isso, um GET (ex.: listar transações) podia servir
+// uma resposta em cache anterior a um POST/PUT/DELETE recém-feito: o usuário
+// via o lançamento aparecer na hora (estado local otimista) mas, ao recarregar
+// a página, o GET batia no cache e o item "sumia" mesmo já persistido no
+// backend.
+export const dynamic = "force-dynamic";
+
 const PROXY_TIMEOUT_MS = 8000;
 
 // SERVICE_* são server-only — nunca expostas ao browser.
@@ -52,6 +61,8 @@ async function fetchUpstream(url: string, method: string, headers: Headers, body
       headers,
       body: body ?? null,
       signal: controller.signal,
+      // Ver comentário em `dynamic` no topo do arquivo — nunca cachear.
+      cache: "no-store",
     });
   } finally {
     clearTimeout(timer);
@@ -80,6 +91,7 @@ async function tryRefreshToken(refreshToken: string): Promise<RefreshResult | nu
       const res = await fetch(`${BACKENDS["identify"]}/api/identify/token/refresh`, {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
+        cache:   "no-store",
         body:    JSON.stringify({ refresh_token: refreshToken }),
       });
       if (!res.ok) return null;
