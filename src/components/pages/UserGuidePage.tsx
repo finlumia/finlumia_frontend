@@ -197,7 +197,9 @@ export function UserGuidePage() {
                 </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "26rem 1fr", gap: "2rem", alignItems: "start" }}>
+            {/* Empilha em 1 coluna até 1024px (celular/tablet) — evita que a
+                coluna fixa de 26rem force scroll horizontal na página. */}
+            <div className="grid-responsive" style={{ ["--grid-cols" as string]: "26rem 1fr", gap: "2rem", alignItems: "start" } as React.CSSProperties}>
 
                 {/* ── Module list ── */}
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.8rem" }}>
@@ -393,7 +395,7 @@ function AccessibilitySection({ f, isDark, border, muted, primary }: {
             </div>
 
             {/* Theme cards */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1.4rem", marginBottom: "2.4rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(20rem, 1fr))", gap: "1.4rem", marginBottom: "2.4rem" }}>
                 {themeOptions.map((t) => {
                     const isActive = theme === t.id;
                     return (
@@ -457,7 +459,7 @@ function AccessibilitySection({ f, isDark, border, muted, primary }: {
                 </p>
 
                 {/* Palette swatches */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1rem", marginBottom: "1.6rem" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(11rem, 1fr))", gap: "1rem", marginBottom: "1.6rem" }}>
                     {CUD_PALETTE.map((c) => (
                         <div key={c.hex} style={{
                             borderRadius: "0.8rem",

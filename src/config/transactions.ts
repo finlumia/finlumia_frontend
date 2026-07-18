@@ -22,6 +22,8 @@ export type Transaction = {
     subDescription?: string;
     amount: number;      // positive for both; type determines sign
     notes?: string;
+    isRecurring?: boolean;
+    recurringId?: string;
 };
 
 export const PAYMENT_METHODS: { id: PaymentMethod; label: string }[] = [

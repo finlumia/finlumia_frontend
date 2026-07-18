@@ -283,7 +283,7 @@ export function SupportTicketPage() {
                 </div>
             )}
 
-            <div style={{ display: "grid", gridTemplateColumns: "minmax(0,2fr) minmax(0,1.4fr)", gap: "2rem", alignItems: "start" }}>
+            <div className="grid-responsive" style={{ ["--grid-cols" as string]: "minmax(0,2fr) minmax(0,1.4fr)", gap: "2rem", alignItems: "start" } as React.CSSProperties}>
 
                 {/* ── Create form ── */}
                 <div style={cardStyle}>

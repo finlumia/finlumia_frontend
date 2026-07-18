@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { getFoundationByTheme } from "../../shared/styles/tokens";
 import type { ThemeMode } from "../../shared/styles/theme.types";
@@ -16,6 +16,14 @@ import navigationConfig from "../../config/navigation.json";
 // reserva espaço variável de viewport. Como página normal, o conteúdo rola
 // junto com o documento e nunca fica inacessível.
 const ADMIN_ONLY_NAV_IDS = new Set(["configurator"]);
+const MANAGER_ONLY_CHILD_NAV_IDS = new Set(["support-portal"]);
+
+type ChildItem = {
+    id: string;
+    label: string;
+    icon: string;
+    href: string;
+};
 
 type NavItem = {
     id: string;
@@ -24,6 +32,7 @@ type NavItem = {
     href: string;
     exact: boolean;
     badge?: string | null;
+    children: ChildItem[];
 };
 
 type NavGroup = {
@@ -81,6 +90,111 @@ const ICONS: Record<string, React.ReactNode> = {
             <path d="m9 18 6-6-6-6"/>
         </svg>
     ),
+    ChevronDown: (
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="m6 9 6 6 6-6"/>
+        </svg>
+    ),
+    Receipt: (
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/>
+            <path d="M8 7h8"/><path d="M8 11h8"/><path d="M8 15h5"/>
+        </svg>
+    ),
+    PiggyBank: (
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h3v2h4v-4c1-.5 1.7-1 2-2h2v-4h-2c0-1-.5-1.5-1-2z"/>
+            <path d="M2 9v1a2 2 0 0 0 2 2h1"/><path d="M16 11h.01"/>
+        </svg>
+    ),
+    Tags: (
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="m9 5 7.5 7.5a2.12 2.12 0 0 1 0 3L13 19l-7.5-7.5a2 2 0 0 1-.5-1.4V5a2 2 0 0 1 2-2h2.6a2 2 0 0 1 1.4.5Z"/>
+            <circle cx="9.5" cy="7.5" r="1"/>
+        </svg>
+    ),
+    Landmark: (
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="3" y1="22" x2="21" y2="22"/><line x1="6" y1="18" x2="6" y2="11"/>
+            <line x1="10" y1="18" x2="10" y2="11"/><line x1="14" y1="18" x2="14" y2="11"/>
+            <line x1="18" y1="18" x2="18" y2="11"/><polygon points="12 2 20 7 4 7"/>
+        </svg>
+    ),
+    CreditCard: (
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>
+        </svg>
+    ),
+    Ticket: (
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 9a2 2 0 0 1 2-2h14l-2 4 2 4H5a2 2 0 0 1-2-2Z"/><path d="M13 5v14"/>
+        </svg>
+    ),
+    Inbox: (
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/>
+            <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>
+        </svg>
+    ),
+    ScrollText: (
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M8 21h12a2 2 0 0 0 2-2v-2H10v2a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v3h4"/>
+            <path d="M19 3H9a2 2 0 0 0-2 2v12h14V5a2 2 0 0 0-2-2z"/>
+            <path d="M11 7h6"/><path d="M11 11h6"/><path d="M11 15h3"/>
+        </svg>
+    ),
+    GraduationCap: (
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M22 10v6M2 10l10-5 10 5-10 5z"/>
+            <path d="M6 12v5c3 3 9 3 12 0v-5"/>
+        </svg>
+    ),
+    Terminal: (
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="4 17 10 11 4 5"/>
+            <line x1="12" y1="19" x2="20" y2="19"/>
+        </svg>
+    ),
+    Table2: (
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/>
+        </svg>
+    ),
+    Columns3: (
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="M15 3v18"/>
+        </svg>
+    ),
+    Users: (
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+            <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        </svg>
+    ),
+    ShieldCheck: (
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>
+        </svg>
+    ),
+    Code2: (
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/>
+        </svg>
+    ),
+    Layers: (
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/>
+            <path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/>
+            <path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/>
+        </svg>
+    ),
+    Zap: (
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>
+        </svg>
+    ),
     LogOut: (
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
@@ -127,13 +241,31 @@ export function MorePage() {
     const { user, logout } = useAuth();
     const { startTour } = useTour();
     const isAdmin = user?.role === "admin";
+    const canAccessSupportPortal = isAdmin || user?.role === "gerente";
     const f = getFoundationByTheme(theme);
     const isDark = theme === "dark";
+
+    const [openItems, setOpenItems] = useState<Set<string>>(new Set());
+    const toggleItem = (id: string) => {
+        setOpenItems((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
 
     const groups = (navigationConfig.sidebar.groups as NavGroup[])
         .map((group) => ({
             ...group,
-            items: group.items.filter((item) => isAdmin || !ADMIN_ONLY_NAV_IDS.has(item.id)),
+            items: group.items
+                .filter((item) => isAdmin || !ADMIN_ONLY_NAV_IDS.has(item.id))
+                .map((item) => ({
+                    ...item,
+                    children: item.children.filter(
+                        (child) => canAccessSupportPortal || !MANAGER_ONLY_CHILD_NAV_IDS.has(child.id),
+                    ),
+                })),
         }))
         .filter((group) => group.items.length > 0);
 
@@ -212,26 +344,56 @@ export function MorePage() {
                         </div>
                     )}
                     <div style={cardStyle}>
-                        {group.items.map((item, i) => (
-                            <button
-                                key={item.id}
-                                type="button"
-                                style={i === group.items.length - 1 ? lastRowStyle : rowStyle}
-                                onClick={() => router.push(item.href)}
-                            >
-                                <span style={rowIconStyle}>{ICONS[item.icon]}</span>
-                                <span style={{ flex: 1 }}>{item.label}</span>
-                                {item.badge && (
-                                    <span style={{
-                                        fontSize: "1.0rem", fontWeight: 600, padding: "0.15rem 0.5rem",
-                                        borderRadius: "999px", backgroundColor: f.colors.feedback.infoBg, color: f.colors.feedback.info,
-                                    }}>
-                                        {item.badge}
-                                    </span>
-                                )}
-                                <span style={{ ...rowIconStyle, width: "1.6rem" }}>{ICONS.ChevronRight}</span>
-                            </button>
-                        ))}
+                        {group.items.map((item, i) => {
+                            const isLast = i === group.items.length - 1;
+                            const hasChildren = item.children.length > 0;
+                            const isOpen = openItems.has(item.id);
+                            return (
+                                <div key={item.id}>
+                                    <button
+                                        type="button"
+                                        style={isLast && !(hasChildren && isOpen) ? lastRowStyle : rowStyle}
+                                        onClick={() => (hasChildren ? toggleItem(item.id) : router.push(item.href))}
+                                        aria-expanded={hasChildren ? isOpen : undefined}
+                                    >
+                                        <span style={rowIconStyle}>{ICONS[item.icon]}</span>
+                                        <span style={{ flex: 1 }}>{item.label}</span>
+                                        {item.badge && (
+                                            <span style={{
+                                                fontSize: "1.0rem", fontWeight: 600, padding: "0.15rem 0.5rem",
+                                                borderRadius: "999px", backgroundColor: f.colors.feedback.infoBg, color: f.colors.feedback.info,
+                                            }}>
+                                                {item.badge}
+                                            </span>
+                                        )}
+                                        <span style={{ ...rowIconStyle, width: "1.6rem" }}>
+                                            {hasChildren ? (isOpen ? ICONS.ChevronDown : ICONS.ChevronRight) : ICONS.ChevronRight}
+                                        </span>
+                                    </button>
+
+                                    {hasChildren && isOpen && (
+                                        <div style={{ backgroundColor: isDark ? f.colors.bg.surface : "#FAFAFA" }}>
+                                            {item.children.map((child, ci) => (
+                                                <button
+                                                    key={child.id}
+                                                    type="button"
+                                                    style={{
+                                                        ...(isLast && ci === item.children.length - 1 ? lastRowStyle : rowStyle),
+                                                        paddingLeft: "3.4rem",
+                                                        fontSize: "1.3rem",
+                                                    }}
+                                                    onClick={() => router.push(child.href)}
+                                                >
+                                                    <span style={{ ...rowIconStyle, width: "1.6rem", height: "1.6rem" }}>{ICONS[child.icon]}</span>
+                                                    <span style={{ flex: 1 }}>{child.label}</span>
+                                                    <span style={{ ...rowIconStyle, width: "1.6rem" }}>{ICONS.ChevronRight}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
             ))}

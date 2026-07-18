@@ -24,6 +24,7 @@ type FormData = {
     description: string;
     amount: string;
     notes: string;
+    isRecurring: boolean;
 };
 
 const EMPTY: FormData = {
@@ -35,6 +36,7 @@ const EMPTY: FormData = {
     description: "",
     amount: "",
     notes: "",
+    isRecurring: false,
 };
 
 type NewTransactionModalProps = {
@@ -77,6 +79,9 @@ export function NewTransactionModal({ open, onClose, onSave, theme = "dark", ini
             description: initial.description,
             amount: amountToMaskedInput(initial.amount),
             notes: initial.notes ?? "",
+            // Preserva o estado de recorrência do lançamento original — enviar
+            // isRecurring:false por engano ao editar desvincula a série no backend.
+            isRecurring: initial.isRecurring ?? false,
         } : EMPTY);
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open]);
@@ -123,6 +128,7 @@ export function NewTransactionModal({ open, onClose, onSave, theme = "dark", ini
                 description: form.description,
                 amount: parseMoney(form.amount),
                 notes: form.notes || undefined,
+                isRecurring: form.isRecurring,
             });
             handleClose();
         } catch (err: unknown) {

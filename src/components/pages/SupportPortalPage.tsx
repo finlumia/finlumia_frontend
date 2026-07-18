@@ -522,7 +522,7 @@ function PortalContent({
             </div>
 
             {/* Stats */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "1.2rem", marginBottom: "2.4rem" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(11rem, 1fr))", gap: "1.2rem", marginBottom: "2.4rem" }}>
                 {[
                     { label: "Total",       value: stats?.total ?? tickets.length,                   color: f.colors.text.primary },
                     { label: "Abertos",     value: stats?.by_status.aberto ?? 0,                     color: "#2563EB" },

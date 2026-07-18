@@ -143,6 +143,9 @@ export function MovimentationPage() {
             subDescription: tx.subDescription,
             amount: tx.amount,
             notes: tx.notes,
+            // Backend exige o campo (@NotNull) e usa o valor para decidir se
+            // preserva (true) ou desvincula (false) o lançamento da série.
+            isRecurring: tx.isRecurring ?? false,
         };
         if (editingTx) {
             try {
@@ -150,13 +153,25 @@ export function MovimentationPage() {
                 updateTransaction(editingTx.id, updated as unknown as Transaction);
                 setEditingTx(null);
             } catch (err) {
+                const status = (err as { status?: number }).status;
                 // Lançamento pode ter sido excluído/alterado em outra sessão desde que a
                 // lista foi carregada — sem isso, o usuário ficava preso tentando salvar
                 // um id que o backend não reconhece mais, sempre recebendo o mesmo 404.
-                if ((err as { status?: number }).status === 404) {
+                if (status === 404) {
                     removeTransaction(editingTx.id);
                     setEditingTx(null);
                     setApiError("Este lançamento não foi encontrado — pode ter sido removido. A lista foi atualizada.");
+                    refreshTransactions();
+                    return;
+                }
+                // 410: o id existiu mas a série inteira foi apagada em cascata (delete
+                // "a partir daqui"/"todas") a partir de outra instância — distinto do
+                // 404 genérico, então a lista precisa ser revalidada por completo, não
+                // só o item clicado.
+                if (status === 410) {
+                    removeTransaction(editingTx.id);
+                    setEditingTx(null);
+                    setApiError("Este lançamento fazia parte de uma série recorrente que foi removida.");
                     refreshTransactions();
                     return;
                 }
@@ -194,12 +209,23 @@ export function MovimentationPage() {
             removeTransaction(id);
             setSelected((prev) => { const s = new Set(prev); s.delete(id); return s; });
         } catch (err: unknown) {
+            const status = (err as { status?: number })?.status;
             // 404 aqui significa que o lançamento já não existe no backend — remove
             // localmente também para não deixar uma linha "fantasma" na tabela.
-            if ((err as { status?: number })?.status === 404) {
+            if (status === 404) {
                 removeTransaction(id);
                 setSelected((prev) => { const s = new Set(prev); s.delete(id); return s; });
                 setApiError("Este lançamento já havia sido removido. A lista foi atualizada.");
+                return;
+            }
+            // 410: a série desse lançamento foi apagada em cascata por outra ação
+            // (delete "a partir daqui"/"todas") — outras instâncias da mesma série
+            // também podem estar obsoletas na lista, então revalida tudo.
+            if (status === 410) {
+                removeTransaction(id);
+                setSelected((prev) => { const s = new Set(prev); s.delete(id); return s; });
+                setApiError("Este lançamento fazia parte de uma série recorrente que foi removida. A lista foi atualizada.");
+                refreshTransactions();
                 return;
             }
             setApiError((err as { message?: string })?.message ?? "Erro ao excluir transação.");

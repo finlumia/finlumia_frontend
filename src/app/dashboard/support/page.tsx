@@ -1,20 +1,8 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import React from "react";
-import { getFoundationByTheme } from "../../../shared/styles/tokens";
-import { useTheme } from "../../../shared/styles/theme.context";
-
+// Página "hub" sem conteúdo próprio — o menu (Sidebar e MorePage) sempre
+// expande os filhos (Abrir Ticket / Portal de Suporte) em vez de navegar
+// para cá, mas mantemos o redirect para o caso de alguém abrir a URL direto.
 export default function Page() {
-    const { theme } = useTheme();
-    const f = getFoundationByTheme(theme);
-    return (
-        <div className="page-responsive" style={{ fontFamily: f.typography.fontFamily.base }}>
-            <h1 style={{ fontSize: "2.4rem", fontWeight: 700, color: f.colors.text.primary, marginBottom: "0.4rem" }}>
-                Suporte
-            </h1>
-            <p style={{ fontSize: "1.4rem", color: f.colors.text.muted }}>
-                Central de ajuda, tutoriais e abertura de chamados.
-            </p>
-        </div>
-    );
+    redirect("/dashboard/support/ticket");
 }

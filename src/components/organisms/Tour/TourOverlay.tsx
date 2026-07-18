@@ -11,6 +11,9 @@ type Rect = { top: number; left: number; width: number; height: number };
 const SPOTLIGHT_PAD = 10;
 const TOOLTIP_W = 360;
 const TOOLTIP_GAP = 24;
+// Margem de segurança (px) entre o cartão do tour e a borda da viewport —
+// mesma folga usada pelos cartões centralizados (calc(100vw - 3.2rem)).
+const VIEWPORT_MARGIN = 32;
 
 // ── Icons ──────────────────────────────────────────────────────────────────
 
@@ -61,11 +64,13 @@ export function TourOverlay() {
     const [rect, setRect] = useState<Rect | null>(null);
     const [opacity, setOpacity] = useState(0);
     const [vh, setVh] = useState(800);
+    const [vw, setVw] = useState(1280);
 
     useEffect(() => {
         setMounted(true);
         setVh(window.innerHeight);
-        const onResize = () => setVh(window.innerHeight);
+        setVw(window.innerWidth);
+        const onResize = () => { setVh(window.innerHeight); setVw(window.innerWidth); };
         window.addEventListener("resize", onResize);
         return () => window.removeEventListener("resize", onResize);
     }, []);
@@ -77,7 +82,14 @@ export function TourOverlay() {
             const el = document.querySelector(currentStep.target!);
             if (!el) { setRect(null); return; }
             const r = el.getBoundingClientRect();
-            if (r.width === 0 || r.height === 0) { setRect(null); return; }
+            // Em tablet/celular o item pode existir no DOM mas estar fora da tela
+            // (drawer da Sidebar fechado, off-canvas via transform) — nesse caso
+            // tratamos como "sem alvo" e caímos no cartão centralizado em vez de
+            // posicionar o tooltip sobre um elemento invisível.
+            const onScreen = r.width > 0 && r.height > 0
+                && r.right > 0 && r.left < window.innerWidth
+                && r.bottom > 0 && r.top < window.innerHeight;
+            if (!onScreen) { setRect(null); return; }
             setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
         };
         const t = setTimeout(measure, 60);
@@ -110,6 +122,18 @@ export function TourOverlay() {
         ? Math.max(16, Math.min(rect.top + rect.height / 2 - estimatedTooltipH / 2, vh - estimatedTooltipH - 16))
         : vh / 2 - estimatedTooltipH / 2;
     const arrowOffsetTop = rect ? rect.top + rect.height / 2 - safeTop : estimatedTooltipH / 2;
+
+    // Largura do tooltip nunca ultrapassa a viewport (tablets/celulares
+    // estreitos) — em telas largas mantém a largura fixa de sempre.
+    const tooltipW = Math.min(TOOLTIP_W, vw - VIEWPORT_MARGIN * 2);
+    // Quando ancorado, o tooltip fica à direita do alvo — mas nunca a ponto
+    // de vazar pela borda direita da tela.
+    const anchoredLeft = rect
+        ? Math.min(
+            rect.left + rect.width + SPOTLIGHT_PAD + TOOLTIP_GAP,
+            vw - tooltipW - VIEWPORT_MARGIN,
+        )
+        : 0;
 
     // ── Common card styles ─────────────────────────────────────────────────
     const cardBase: React.CSSProperties = {
@@ -208,13 +232,12 @@ export function TourOverlay() {
                         ...cardBase,
                         position: "fixed",
                         top: rect ? safeTop : vh / 2 - estimatedTooltipH / 2,
-                        left: rect
-                            ? rect.left + rect.width + SPOTLIGHT_PAD + TOOLTIP_GAP
-                            : "50%",
+                        left: rect ? anchoredLeft : "50%",
                         transform: !rect
                             ? `translateX(-50%) ${opacity === 1 ? "scale(1)" : "scale(0.94)"}`
                             : opacity === 1 ? "scale(1)" : "scale(0.96)",
-                        width: TOOLTIP_W,
+                        width: tooltipW,
+                        maxWidth: `calc(100vw - ${VIEWPORT_MARGIN * 2}px)`,
                         padding: "2.4rem",
                     }}>
                         {/* Arrow pointing left toward spotlight */}

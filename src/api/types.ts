@@ -140,7 +140,10 @@ export type TransactionCreateRequest = {
   amount:         number;
   notes?:         string;
   tags?:          string[];
-  isRecurring?:   boolean;
+  // Obrigatório no backend (@NotNull) — omitir o campo passou a resultar em
+  // 422 em vez de assumir `false` silenciosamente (isso causava desvinculação
+  // acidental de recorrências ao editar). Sempre envie true|false explícito.
+  isRecurring:    boolean;
   recurringMonths?: number;
 };
 
