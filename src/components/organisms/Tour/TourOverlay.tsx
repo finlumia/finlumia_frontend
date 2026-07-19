@@ -118,8 +118,15 @@ export function TourOverlay() {
 
     // ── Spotlight tooltip positioning ──────────────────────────────────────
     const estimatedTooltipH = 360;
+    // Limite real de altura do card (mesma fórmula do `maxHeight` aplicado no
+    // style abaixo). Passos com muitas dicas (Movimentações, Suporte) podem
+    // renderizar bem mais altos que `estimatedTooltipH` — usar esse teto real
+    // no clamp garante que o card (mesmo no tamanho máximo, rolando por
+    // dentro) sempre caiba na viewport, em vez de empurrar os botões de
+    // navegação para fora da tela.
+    const tooltipMaxH = vh - VIEWPORT_MARGIN * 2;
     const safeTop = rect
-        ? Math.max(16, Math.min(rect.top + rect.height / 2 - estimatedTooltipH / 2, vh - estimatedTooltipH - 16))
+        ? Math.max(VIEWPORT_MARGIN, Math.min(rect.top + rect.height / 2 - estimatedTooltipH / 2, vh - tooltipMaxH - VIEWPORT_MARGIN))
         : vh / 2 - estimatedTooltipH / 2;
     const arrowOffsetTop = rect ? rect.top + rect.height / 2 - safeTop : estimatedTooltipH / 2;
 
