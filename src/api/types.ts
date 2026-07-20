@@ -511,13 +511,37 @@ export type TicketResponse = {
   created_at:  string;
 };
 
+export type AttachmentConversionStatus = "not_applicable" | "pending" | "processing" | "completed" | "failed";
+
 export type TicketAttachment = {
-  id:              string;
-  file_name:       string;
-  file_size_bytes: number;
-  mime_type:       string;
-  url:             string;
-  created_at:      string;
+  id:                string;
+  file_name:         string;
+  file_size_bytes:   number;
+  mime_type:         string;
+  url:               string;
+  thumbnail_url:     string | null;
+  conversion_status: AttachmentConversionStatus;
+  created_at:        string;
+};
+
+// Corpos em camelCase — mesmo padrão de CreateTicketBody, ver support.api.ts.
+export type PresignAttachmentBody = {
+  fileName:      string;
+  mimeType:      string;
+  fileSizeBytes: number;
+  responseId?:   string | null;
+};
+
+export type PresignAttachmentResponse = {
+  attachment_id: string;
+  upload_url:    string;
+  expires_at:    string;
+};
+
+export type CompleteAttachmentBody = {
+  fileName:    string;
+  mimeType:    string;
+  responseId?: string | null;
 };
 
 export type TicketDetail = Omit<TicketListItem, "response_count"> & {

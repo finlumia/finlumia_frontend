@@ -199,8 +199,9 @@ export const API_ENDPOINTS = {
     deleteTicket:       ep("support", "/api/v1/support/tickets/:id",                                           "DELETE"),
     listResponses:      ep("support", "/api/v1/support/tickets/:ticketId/responses",                           "GET"),
     addResponse:        ep("support", "/api/v1/support/tickets/:ticketId/responses",                           "POST"),
-    addAttachment:      ep("support", "/api/v1/support/tickets/:ticketId/attachments",                         "POST"),
-    downloadAttachment: ep("support", "/api/v1/support/tickets/:ticketId/attachments/:attachmentId/download",  "GET"),
+    presignAttachment:  ep("support", "/api/v1/support/tickets/:ticketId/attachments/presign",                          "POST"),
+    completeAttachment: ep("support", "/api/v1/support/tickets/:ticketId/attachments/:attachmentId/complete",           "POST"),
+    downloadAttachment: ep("support", "/api/v1/support/tickets/:ticketId/attachments/:attachmentId/download",           "GET"),
   },
 
 } as const;

@@ -12,6 +12,7 @@ import type {
   TicketStats,
   TicketResponse,
   TicketAttachment,
+  PresignAttachmentResponse,
   SupportPaginatedResponse,
   CreateTicketBody,
   PatchTicketBody,
@@ -77,40 +78,47 @@ export const supportApi = {
     return http.post<TicketResponse>(buildUrl(e.addResponse, { ticketId }), body);
   },
 
-  uploadAttachment(
+  // Fluxo em 3 chamadas: 1) presign (pede URL assinada) 2) PUT direto no
+  // storage (fora do proxy — o Content-Length do arquivo tem que bater
+  // exatamente com fileSizeBytes enviado no passo 1) 3) complete (confirma
+  // o upload e recebe o TicketAttachment já com conversion_status).
+  async uploadAttachment(
     ticketId: string,
     file: File,
     responseId?: string,
     onProgress?: (pct: number) => void,
   ): Promise<TicketAttachment> {
-    return new Promise((resolve, reject) => {
-      const form = new FormData();
-      form.append("file", file);
-      if (responseId) form.append("response_id", responseId);
+    const presigned = await http.post<PresignAttachmentResponse>(
+      buildUrl(e.presignAttachment, { ticketId }),
+      { fileName: file.name, mimeType: file.type, fileSizeBytes: file.size, responseId: responseId ?? null },
+    );
 
+    await new Promise<void>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
-      xhr.open("POST", buildUrl(e.addAttachment, { ticketId }));
-      // O cookie HttpOnly é incluído automaticamente com withCredentials=true.
-      // O proxy injeta o Authorization header antes de encaminhar ao backend.
-      xhr.withCredentials = true;
+      xhr.open("PUT", presigned.upload_url);
+      xhr.setRequestHeader("Content-Type", file.type);
 
       if (onProgress) {
         xhr.upload.onprogress = (ev) => {
-          if (ev.lengthComputable) onProgress(Math.round((ev.loaded / ev.total) * 100));
+          if (ev.lengthComputable) onProgress(Math.round((ev.loaded / ev.total) * 90));
         };
       }
 
       xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          resolve(JSON.parse(xhr.responseText) as TicketAttachment);
-        } else {
-          try { reject(JSON.parse(xhr.responseText)); }
-          catch { reject({ mensage: "Erro no upload." }); }
-        }
+        if (xhr.status >= 200 && xhr.status < 300) resolve();
+        else reject({ status: xhr.status, message: "Falha ao enviar arquivo para o armazenamento." });
       };
-      xhr.onerror = () => reject({ mensage: "Erro de rede durante o upload." });
-      xhr.send(form);
+      xhr.onerror = () => reject({ message: "Erro de rede durante o upload." });
+      xhr.send(file);
     });
+
+    onProgress?.(95);
+    const attachment = await http.post<TicketAttachment>(
+      buildUrl(e.completeAttachment, { ticketId, attachmentId: presigned.attachment_id }),
+      { fileName: file.name, mimeType: file.type, responseId: responseId ?? null },
+    );
+    onProgress?.(100);
+    return attachment;
   },
 
   async downloadAttachment(ticketId: string, attachmentId: string, fileName: string) {
@@ -131,6 +139,11 @@ export const supportApi = {
 export function supportErrorMessage(err: unknown): string {
   if (err && typeof err === "object") {
     const e = err as Record<string, unknown>;
+    const status = typeof e.status === "number" ? e.status : undefined;
+    // 415/413 têm mensagem amigável fixa — a API pode devolver um texto
+    // técnico (ex.: "Unsupported Media Type") que não ajuda o usuário final.
+    if (status === 415) return "Tipo de arquivo não suportado";
+    if (status === 413) return "Arquivo muito grande";
     if (typeof e.mensage === "string") return e.mensage;
     if (typeof e.message === "string") return e.message;
     if (typeof e.title === "string")   return e.title;
@@ -142,4 +155,17 @@ export const ACCEPTED_MIME = [
   "image/png", "image/jpeg", "image/webp",
   "application/pdf", "text/plain", "text/csv",
 ];
-export const MAX_FILE_BYTES = 10_485_760;
+export const MAX_FILE_BYTES = 10_485_760; // 10 MB
+
+export const ACCEPTED_VIDEO_MIME = ["video/mp4", "video/quicktime", "video/webm"];
+export const MAX_VIDEO_BYTES = 104_857_600; // 100 MB — teto do proxy/CDN em produção
+
+export const ALL_ACCEPTED_MIME = [...ACCEPTED_MIME, ...ACCEPTED_VIDEO_MIME];
+
+export function isVideoMime(mimeType: string): boolean {
+  return (ACCEPTED_VIDEO_MIME as string[]).includes(mimeType);
+}
+
+export function maxBytesForMime(mimeType: string): number {
+  return isVideoMime(mimeType) ? MAX_VIDEO_BYTES : MAX_FILE_BYTES;
+}

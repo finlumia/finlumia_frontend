@@ -1,6 +1,6 @@
 # Finlumia Frontend
 
-Frontend da plataforma **Finlumia** — gestão financeira pessoal. Construído com **Next.js 15** (App Router), **React 19** e **TypeScript**, integrado a 4 microserviços Spring Boot via camada de serviços tipada.
+Frontend da plataforma **Finlumia** — gestão financeira pessoal. Construído com **Next.js 15** (App Router), **React 19** e **TypeScript**, integrado a 5 microserviços Spring Boot através de um proxy server-side (nenhuma URL de backend ou token chega ao browser).
 
 ---
 
@@ -65,27 +65,29 @@ O arquivo `.env.local` é **obrigatório** antes de qualquer execução. Ele nun
 cp .env.example .env.local
 ```
 
-Abra `.env.local` e ajuste as variáveis para o seu ambiente:
+Diferente de um setup tradicional de SPA, **nenhuma URL de backend é exposta ao browser**. Toda chamada da UI passa por um proxy Next.js server-side (`/proxy/<serviço>/*`, implementado em [`src/app/proxy/[...path]/route.ts`](src/app/proxy/%5B...path%5D/route.ts)), que lê as variáveis abaixo **no servidor** e encaminha a requisição ao microserviço real — o navegador nunca vê `SERVICE_*_URL`, nem o token JWT (ver [Autenticação](#autenticação)).
 
 ```env
-# Define qual conjunto de URLs de API usar
-NEXT_PUBLIC_APP_ENV=local          # local | homologation | production
+# ── PROXY SERVER-TO-SERVER (sem NEXT_PUBLIC — nunca chegam ao bundle do browser)
+SERVICE_IDENTIFICATION_URL=http://localhost:28083
+SERVICE_MOVIMENTATION_URL=http://localhost:28084
+SERVICE_DOCUMENT_URL=http://localhost:28085
+SERVICE_CONFIGURATOR_URL=http://localhost:28081
+SERVICE_SUPPORT_URL=http://localhost:28082
 
-# Versão dos endpoints REST
-NEXT_PUBLIC_API_VERSION=v1
+# ── AUTENTICAÇÃO GOOGLE OAUTH — único valor público exigido
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=<client-id>.apps.googleusercontent.com
 
-# URLs dos microserviços — ambiente LOCAL
-NEXT_PUBLIC_SERVICE_IDENTIFICATION_LOCAL=http://localhost:8080/identification
-NEXT_PUBLIC_SERVICE_MOVIMENTATION_LOCAL=http://localhost:8080/movimentation
-NEXT_PUBLIC_SERVICE_DOCUMENT_LOCAL=http://localhost:8080/document
-NEXT_PUBLIC_SERVICE_CONFIGURATOR_LOCAL=http://localhost:8080/configurator
-
-# URLs para homologação e produção (ver .env.example para lista completa)
-# NEXT_PUBLIC_SERVICE_IDENTIFICATION_HOMOLOGATION=https://<seu-host-homologacao>/identification
-# NEXT_PUBLIC_SERVICE_IDENTIFICATION_PRODUCTION=https://apifinlumia.identification.thiagobenevide.com
+# ── FEATURE FLAGS (opcional)
+NEXT_PUBLIC_FEATURE_IMPORT_ENABLED=false
+NEXT_PUBLIC_FEATURE_MFA_ENABLED=true
 ```
 
-> **Importante:** variáveis `NEXT_PUBLIC_*` são incorporadas no build pelo Next.js. Alterar o `.env.local` após o build de produção **não** tem efeito — é necessário rebuildar.
+Não existe uma chave `APP_ENV` que troca o conjunto de URLs em runtime — o `.env.local` tem **um único conjunto de valores**, apontando para onde quer que os 5 microserviços estejam rodando naquele momento. Trocar de ambiente (local → homologação → produção) é trocar o conteúdo do arquivo, não uma flag (ver [Entendendo os ambientes](#entendendo-os-ambientes)).
+
+> ⚠️ **Rodando o frontend dentro de um container Docker** (`./finlumia.ps1 -up`)**?** `localhost` dentro do container aponta para o próprio container — nunca para o host, nem para outros containers. Se os 5 backends rodam em containers separados publicando portas no host, troque `localhost` por `host.docker.internal` nas 5 variáveis `SERVICE_*_URL` (ex.: `http://host.docker.internal:28083`). O `finlumia.ps1` já registra esse hostname no container (`--add-host host.docker.internal:host-gateway`); só falta usar o valor certo no `.env.local` — e reiniciar o container depois de editar, já que o Next.js só lê `.env.local` na subida do processo.
+>
+> Variáveis `NEXT_PUBLIC_*` (Google Client ID, feature flags) são incorporadas no build pelo Next.js. Alterar o `.env.local` após o build de produção **não** tem efeito nelas — é necessário rebuildar. As `SERVICE_*_URL`, por serem lidas só em runtime pelo servidor, não têm essa limitação.
 
 ---
 
@@ -178,40 +180,35 @@ O container usa `--restart unless-stopped` e o `.env.local` é passado via `--en
 
 ## Entendendo os ambientes
 
-```
-NEXT_PUBLIC_APP_ENV  →  define qual conjunto de URLs é usado em runtime
-```
+Não há chave de runtime que troca "ambiente" — o único artefato que muda entre local, homologação e produção é o **conteúdo do `.env.local`**. O caminho da requisição é sempre o mesmo:
 
 ```mermaid
 flowchart LR
-    subgraph config [".env.local"]
-        A["NEXT_PUBLIC_APP_ENV=local"]
-        B["NEXT_PUBLIC_APP_ENV=homologation"]
-        C["NEXT_PUBLIC_APP_ENV=production"]
+    subgraph browser ["Browser"]
+        A["fetch('/proxy/support/api/v1/...')"]
     end
 
-    subgraph frontend ["Next.js (Endpoints.ts)"]
-        D["Seleciona URLs _LOCAL"]
-        E["Seleciona URLs _HOMOLOGATION"]
-        F["Seleciona URLs _PRODUCTION"]
+    subgraph nextjs ["Next.js — server-side"]
+        B["/proxy/[...path]/route.ts"]
+        C[".env.local\nSERVICE_*_URL"]
     end
 
-    subgraph backend ["Microserviços"]
-        G["API local / Docker Compose"]
-        H["API de homologação"]
-        I["API de produção"]
+    subgraph backend ["Microserviço real"]
+        D["identify · movement · document\nconfigurator · support"]
     end
 
-    A --> D --> G
-    B --> E --> H
-    C --> F --> I
+    A --> B
+    C -.-> B
+    B -->|injeta Authorization: Bearer\n a partir do cookie HttpOnly| D
 ```
 
-| Ambiente | `APP_ENV` | Quando usar |
-|----------|-----------|-------------|
-| **Local** | `local` | Desenvolvimento com microserviços rodando localmente |
-| **Homologação** | `homologation` | Testes integrados contra API de staging |
-| **Produção** | `production` | Deploy real no servidor |
+| Onde roda | `SERVICE_*_URL` aponta para | Exemplo |
+|-----------|------------------------------|---------|
+| **Local, sem Docker** | Backends rodando direto no host | `http://localhost:28083` |
+| **Local, frontend em Docker** | Backends em containers separados — `localhost` não funciona aqui | `http://host.docker.internal:28083` |
+| **Produção (VPS)** | Subdomínio dedicado por serviço | `https://apifinlumia.identification.thiagobenevide.com` |
+
+O arquivo [`.env.example`](.env.example) já vem com as três variantes comentadas por serviço — descomente/edite a que corresponde ao seu caso.
 
 ### Diferença entre os modos de execução
 
@@ -235,12 +232,13 @@ flowchart LR
 Browser
   └─▶ Next.js App Router (src/app/**/page.tsx)
         └─▶ dashboard/layout.tsx  ──┬──  TourProvider
-                                    ├──  AuthContext (JWT, refresh automático)
+                                    ├──  AuthContext (sessão via cookie HttpOnly, sem token no client)
                                     ├──  FinanceProvider (catálogos + transações)
                                     └──  Sidebar
         └─▶ components/pages/<Page>.tsx
-              └─▶ services/<domínio>/<serviço>.ts  (fetch + Bearer token)
-                    └─▶ Microserviço Spring Boot (identification / movimentation / document / configurator)
+              └─▶ services/<domínio>/*.service.ts ou lib/<domínio>.api.ts  (http-client → /proxy/<serviço>/*)
+                    └─▶ src/app/proxy/[...path]/route.ts  (injeta Bearer a partir do cookie)
+                          └─▶ Microserviço Spring Boot (identify / movement / document / configurator / support)
 ```
 
 ### Camadas
@@ -253,24 +251,32 @@ Browser
 | **Atoms / Molecules** | `src/components/atoms/` | Primitivos visuais (Button, Input, Charts…) |
 | **Contexts** | `src/contexts/` | Estado global: auth, tour |
 | **Shared state** | `src/shared/finance/` | Estado financeiro compartilhado no dashboard |
-| **Services** | `src/services/<domínio>/` | Clientes HTTP por microserviço |
-| **HTTP Client** | `src/lib/http-client.ts` | fetch wrapper com refresh de token JWT (401 automático) |
-| **Endpoints** | `src/api/Endpoints.ts` | Catálogo central de URLs, seleção por ambiente |
+| **Services** | `src/services/<domínio>/*.service.ts` | Clientes HTTP por microserviço (identification, movimentation, document, configurator) |
+| **Lib API clients** | `src/lib/<domínio>.api.ts` | Mesmo papel dos Services, para módulos mais novos (ex.: `support.api.ts`) |
+| **Proxy** | `src/app/proxy/[...path]/route.ts` | Único ponto que conhece as URLs reais dos backends; injeta o Bearer e faz refresh transparente |
+| **HTTP Client** | `src/lib/http-client.ts` | fetch wrapper — sempre `credentials:"same-origin"`, trata 401 residual (redirect `/login`) |
+| **Endpoints** | `src/api/Endpoints.ts` | Catálogo central de rotas, todas prefixadas com `/proxy/<serviço>` |
 | **Tipos API** | `src/api/types.ts` | Tipos TypeScript dos contratos de cada serviço |
 
 ### Autenticação
 
+Os tokens JWT **nunca chegam ao JavaScript do browser** — vivem em cookies `HttpOnly` (`finlumia_access`, `finlumia_refresh`) gerenciados por rotas server-side do Next.js. O `localStorage` só guarda preferências de UI (tema, progresso do tour), nunca credenciais.
+
 ```
-Login  →  POST /auth/login  →  { accessToken, refreshToken }
-                                    ↓
-                            localStorage (chaves internas)
-                                    ↓
-                    Toda requisição: Authorization: Bearer <accessToken>
-                                    ↓
-                          401 recebido?  →  POST /auth/refresh
-                                              ↓ sucesso: retry original
-                                              ↓ falha: redirect /login
+Login  →  POST /api/auth/login (route handler — não é o backend direto)
+              └─▶ backend identify  →  { accessToken, refreshToken }
+                        └─▶ Next.js seta cookies HttpOnly finlumia_access / finlumia_refresh
+
+Toda chamada a /proxy/<serviço>/*
+              └─▶ proxy lê o cookie finlumia_access e injeta Authorization: Bearer <token>
+
+401 do backend?  →  proxy tenta refresh automático com finlumia_refresh
+                     (dedup de ~5s entre requisições concorrentes que expiram juntas)
+                        ↓ sucesso: retenta a chamada original, rotaciona os 2 cookies
+                        ↓ falha: limpa os cookies, retorna 401 → cliente redireciona /login
 ```
+
+Rotas relevantes: `src/app/api/auth/{login,google,logout}/route.ts` (definem/removem os cookies) e `src/app/proxy/[...path]/route.ts` (injeta o Bearer e faz o refresh transparente para todo `/proxy/<serviço>/*`).
 
 ---
 
@@ -294,15 +300,20 @@ finlumia_frontend/
 │   │   ├── register/                # /register
 │   │   ├── forgot-password/         # /forgot-password
 │   │   ├── reset-password/          # /reset-password
+│   │   ├── privacy/, terms/         # Páginas públicas de política e termos
+│   │   ├── api/auth/                # login, google, logout — setam/removem cookies HttpOnly
+│   │   ├── proxy/[...path]/         # Único gateway para os 5 microserviços (ver Arquitetura)
 │   │   └── dashboard/               # Área autenticada (/dashboard/*)
 │   │       ├── layout.tsx           # TourProvider + AuthGuard + FinanceProvider + Sidebar
 │   │       ├── movimentation/       # Transações, orçamento, categorias, bancos
 │   │       ├── reports/             # Relatórios e gráficos
 │   │       ├── configurator/        # CRUD de metadados (tabelas, campos, usuários…)
-│   │       └── support/             # Tickets e documentação
+│   │       ├── support/             # Abertura de ticket + documentação
+│   │       │   └── portal/          # Portal de suporte (admin/gerente) — kanban de tickets
+│   │       └── more/                # Menu "mais" (mobile) + acesso ao tutorial
 │   │
 │   ├── api/
-│   │   ├── Endpoints.ts             # Monta URLs selecionando por NEXT_PUBLIC_APP_ENV
+│   │   ├── Endpoints.ts             # Catálogo de rotas — todas prefixadas /proxy/<serviço>
 │   │   ├── types.ts                 # Tipos de request/response de todos os serviços
 │   │   └── endpoints/               # Contratos JSON por domínio
 │   │
@@ -310,15 +321,17 @@ finlumia_frontend/
 │   │   ├── atoms/                   # Button, Input, Charts, Text…
 │   │   ├── molecules/               # Logo, composições simples
 │   │   ├── organisms/               # Sidebar, Modal, DataTable, ImportModal…
-│   │   │   └── Tour/                # TourOverlay — tutorial interativo
+│   │   │   ├── Tour/                # TourOverlay — tutorial interativo
+│   │   │   └── TicketAttachments/   # Lista/upload/polling de anexos de ticket (imagem, doc, vídeo)
 │   │   └── pages/                   # Telas completas (sem rota Next.js própria)
 │   │
 │   ├── contexts/
-│   │   ├── auth.context.tsx         # useAuth() — user, tokens, isAuthenticated
+│   │   ├── auth.context.tsx         # useAuth() — user, isAuthenticated (sessão via cookie)
 │   │   └── tour.context.tsx         # useTour() — tutorial de onboarding
 │   │
 │   ├── lib/
-│   │   └── http-client.ts           # fetch wrapper com JWT e auto-refresh
+│   │   ├── http-client.ts           # fetch wrapper — credentials:"same-origin", trata 401
+│   │   └── support.api.ts           # Cliente do módulo de suporte (tickets, anexos)
 │   │
 │   ├── services/
 │   │   ├── identification/          # authService, profileService
@@ -352,30 +365,38 @@ finlumia_frontend/
 
 ## Microserviços e endpoints
 
-O frontend consome 4 microserviços Spring Boot. As URLs são selecionadas automaticamente em `src/api/Endpoints.ts` com base em `NEXT_PUBLIC_APP_ENV`.
+O frontend consome **5 microserviços** Spring Boot, todos por trás do proxy Next.js — nenhum é chamado diretamente pelo browser.
 
-| Microserviço | Variável de ambiente | Responsabilidade |
-|--------------|----------------------|------------------|
-| **identification** | `NEXT_PUBLIC_SERVICE_IDENTIFICATION_*` | Login, cadastro, tokens JWT, perfil |
-| **movimentation** | `NEXT_PUBLIC_SERVICE_MOVIMENTATION_*` | Transações, categorias, bancos, importação |
-| **document** | `NEXT_PUBLIC_SERVICE_DOCUMENT_*` | Relatórios, gráficos, exportação |
-| **configurator** | `NEXT_PUBLIC_SERVICE_CONFIGURATOR_*` | Metadados: tabelas, campos, usuários, permissões |
+| Microserviço | Variável em `.env.local` | Prefixo do proxy | Responsabilidade |
+|--------------|---------------------------|-------------------|------------------|
+| **identify** | `SERVICE_IDENTIFICATION_URL` | `/proxy/identify` | Login, cadastro, tokens JWT, perfil |
+| **movement** | `SERVICE_MOVIMENTATION_URL` | `/proxy/movement` | Transações, categorias, bancos, importação |
+| **document** | `SERVICE_DOCUMENT_URL` | `/proxy/document` | Relatórios, gráficos, exportação |
+| **configurator** | `SERVICE_CONFIGURATOR_URL` | `/proxy/configurator` | Metadados: tabelas, campos, usuários, permissões |
+| **support** | `SERVICE_SUPPORT_URL` | `/proxy/support` | Tickets de suporte, anexos (upload direto ao storage), documentação |
+
+O mapeamento serviço → prefixo vive em `BACKENDS` dentro de `src/app/proxy/[...path]/route.ts`; o catálogo de rotas de cada serviço vive em `src/api/Endpoints.ts` (sempre `ep("<serviço>", "<path>", "<método>")`, nunca uma URL absoluta).
 
 ### Cliente HTTP (`src/lib/http-client.ts`)
 
 Todas as chamadas passam pelo wrapper centralizado que:
-- Injeta `Authorization: Bearer <token>` automaticamente
-- Detecta `401` e tenta refresh antes de retentar
-- Suporta `{ skipAuth: true }` para endpoints públicos (ex.: categorias)
+- Sempre envia `credentials: "same-origin"` — o cookie HttpOnly vai junto automaticamente, o proxy é quem injeta o `Authorization: Bearer <token>` no salto para o backend real
+- Em `401` (sessão realmente expirada, refresh já tentado pelo proxy), redireciona para `/login` se a rota atual for `/dashboard/**`
+- Em qualquer erro não-2xx, lança `{ status, ...corpoDaResposta }` — é esse objeto que `supportErrorMessage`/equivalentes leem para montar mensagens amigáveis
 
 ```ts
 import { http } from "@/lib/http-client";
+import { buildUrl, API_ENDPOINTS } from "@/api/Endpoints";
 
-// Endpoint autenticado
-const data = await http.get<Transaction[]>("/transactions");
+const e = API_ENDPOINTS.support;
 
-// Endpoint público
-const cats = await http.get<Category[]>("/categories", { skipAuth: true });
+// GET simples
+const ticket = await http.get<TicketDetail>(buildUrl(e.getTicket, { id }));
+
+// POST com corpo
+const created = await http.post<TicketListItem>(e.createTicket.url, {
+  title, category, priority, description,
+});
 ```
 
 ---
@@ -457,19 +478,18 @@ refactor: extrai lógica de refresh para http-client
 
 ## Variáveis de ambiente — referência completa
 
-| Variável | Valores | Descrição |
-|----------|---------|-----------|
-| `NEXT_PUBLIC_APP_ENV` | `local` \| `homologation` \| `production` | Seleciona o conjunto de URLs ativo |
-| `NEXT_PUBLIC_API_VERSION` | `v1` | Prefixo de versão nos paths da API |
-| `NEXT_PUBLIC_SERVICE_IDENTIFICATION_*` | URL | Base do serviço de autenticação |
-| `NEXT_PUBLIC_SERVICE_MOVIMENTATION_*` | URL | Base do serviço de transações |
-| `NEXT_PUBLIC_SERVICE_DOCUMENT_*` | URL | Base do serviço de relatórios |
-| `NEXT_PUBLIC_SERVICE_CONFIGURATOR_*` | URL | Base do serviço de configuração |
-| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | string | Client ID para OAuth Google |
-| `NEXT_PUBLIC_FEATURE_IMPORT_ENABLED` | `true` \| `false` | Feature flag de importação de extratos |
-| `NEXT_PUBLIC_FEATURE_MFA_ENABLED` | `true` \| `false` | Feature flag de autenticação MFA |
+| Variável | Valores | Exposta ao browser? | Descrição |
+|----------|---------|----------------------|-----------|
+| `SERVICE_IDENTIFICATION_URL` | URL | Não (server-only) | Base real do serviço identify — lida só pelo proxy |
+| `SERVICE_MOVIMENTATION_URL` | URL | Não (server-only) | Base real do serviço movement |
+| `SERVICE_DOCUMENT_URL` | URL | Não (server-only) | Base real do serviço document |
+| `SERVICE_CONFIGURATOR_URL` | URL | Não (server-only) | Base real do serviço configurator |
+| `SERVICE_SUPPORT_URL` | URL | Não (server-only) | Base real do serviço support (tickets, anexos) |
+| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | string | Sim | Client ID público do Google Cloud Console para login OAuth |
+| `NEXT_PUBLIC_FEATURE_IMPORT_ENABLED` | `true` \| `false` | Sim | Feature flag de importação de extratos |
+| `NEXT_PUBLIC_FEATURE_MFA_ENABLED` | `true` \| `false` | Sim | Feature flag de autenticação MFA |
 
-O sufixo `*` substitui o ambiente: `_LOCAL`, `_HOMOLOGATION` ou `_PRODUCTION`.
+As 5 variáveis `SERVICE_*_URL` nunca devem ganhar o prefixo `NEXT_PUBLIC_` — isso as incorporaria ao bundle do browser, expondo a URL real dos backends. Só `NEXT_PUBLIC_GOOGLE_CLIENT_ID` e as feature flags são, de fato, públicos por natureza (client ID OAuth e flags de UI não são segredo).
 
 ---
 
@@ -498,6 +518,8 @@ O sufixo `*` substitui o ambiente: `_LOCAL`, `_HOMOLOGATION` ou `_PRODUCTION`.
 | `/register` | Cadastro com validação e aceite de termos |
 | `/forgot-password` | Solicitação de redefinição de senha |
 | `/reset-password` | Redefinição com token |
+| `/privacy` | Política de privacidade |
+| `/terms` | Termos de uso |
 
 ### Dashboard (`/dashboard/*`)
 
@@ -517,8 +539,10 @@ O sufixo `*` substitui o ambiente: `_LOCAL`, `_HOMOLOGATION` ou `_PRODUCTION`.
 | `/dashboard/configurator/functions` | Metadados — funções |
 | `/dashboard/configurator/indexes` | Metadados — índices |
 | `/dashboard/configurator/triggers` | Metadados — triggers |
-| `/dashboard/support/ticket` | Abertura de chamado |
-| `/dashboard/support/documentation` | Documentação interna |
+| `/dashboard/support/ticket` | Abertura de chamado + "Meus tickets" (anexos: imagem, documento, vídeo) |
+| `/dashboard/support/portal` | Portal de suporte (admin/gerente) — kanban, filtros, resposta e anexos |
+| `/dashboard/support/documentation` | Documentação interna — guia do usuário, educação financeira, técnica |
+| `/dashboard/more` | Menu "mais" (layout mobile) + reabrir o tutorial guiado |
 
 ---
 

@@ -171,26 +171,24 @@ cp .env.example .env.local
 npm run dev
 # Acesse: http://localhost:3000`} />
 
-                        <SectionTitle color={primary}>Opção B — Docker (ambiente padronizado)</SectionTitle>
-                        <CodeBlock isDark={isDark} border={border} code={`# Windows — PowerShell
-docker compose -f docker-compose.dev.yml up --build
-
-# Linux / macOS
-docker compose -f docker-compose.dev.yml up --build
+                        <SectionTitle color={primary}>Opção B — Docker (desenvolvimento, Windows)</SectionTitle>
+                        <CodeBlock isDark={isDark} border={border} code={`# Windows — PowerShell (script gerencia o container, sem docker-compose)
+./finlumia.ps1 -up -Build     # primeira vez (constrói a imagem)
+./finlumia.ps1 -up            # execuções seguintes
 
 # Acesse: http://localhost:3000`} />
 
-                        <SectionTitle color={primary}>Opção C — Produção (Linux/VPS)</SectionTitle>
-                        <CodeBlock isDark={isDark} border={border} code={`# Build da imagem de produção
-docker compose -f docker-compose.prod.yml up --build -d
+                        <SectionTitle color={primary}>Opção C — Docker (produção, Linux/VPS)</SectionTitle>
+                        <CodeBlock isDark={isDark} border={border} code={`chmod +x finlumia.sh
+./finlumia.sh -up -Build      # primeira vez (build de produção dentro do container)
+./finlumia.sh -up             # execuções seguintes
 
-# Variáveis obrigatórias em produção:
-# NEXT_PUBLIC_APP_ENV=production
-# NEXT_PUBLIC_SERVICE_IDENTIFICATION_PRODUCTION=https://api.seudominio.com/identification
-# (demais variáveis de serviço)`} />
+# .env.local na raiz do projeto — variáveis obrigatórias em produção:
+# SERVICE_IDENTIFICATION_URL=https://apifinlumia.identification.thiagobenevide.com
+# (demais SERVICE_*_URL — ver aba "Variáveis de Ambiente")`} />
 
                         <InfoBox type="warn" f={f} isDark={isDark}>
-                            Em produção, NUNCA exponha <code>NEXT_PUBLIC_</code> vars com secrets. Elas ficam visíveis no bundle do browser.
+                            As <code>SERVICE_*_URL</code> nunca devem ganhar o prefixo <code>NEXT_PUBLIC_</code> — isso as exporia no bundle do browser. Elas são lidas só pelo proxy Next.js, server-side (ver aba "Arquitetura").
                         </InfoBox>
                     </div>
                 )}
@@ -199,26 +197,27 @@ docker compose -f docker-compose.prod.yml up --build -d
                 {activeTab === "architecture" && (
                     <div style={prose}>
                         <h2 style={{ fontSize: "1.9rem", fontWeight: 700, color: f.colors.text.primary, marginBottom: "1.2rem" }}>Arquitetura Geral</h2>
-                        <p>O Finlumia é composto por um frontend Next.js e quatro microserviços Spring Boot independentes, cada um responsável por um domínio de negócio.</p>
+                        <p>O Finlumia é composto por um frontend Next.js e cinco microserviços Spring Boot independentes, cada um responsável por um domínio de negócio. Nenhum deles é chamado diretamente pelo browser — tudo passa por um proxy server-side.</p>
 
                         <SectionTitle color={primary}>Diagrama de camadas</SectionTitle>
                         <CodeBlock isDark={isDark} border={border} code={`[Browser] → [Next.js App (Port 3000)]
                 ↓
-         [Proxy / Rewrites]
-         /proxy/identify    → Identification Service  :28083
-         /proxy/movement    → Movimentation Service   :28084
-         /proxy/document    → Document Service        :28085
-         /proxy/configurator → Configurator Service   :28081`} />
+         [/proxy/[...path]/route.ts — server-side, lê SERVICE_*_URL]
+         /proxy/identify      → Identification Service  :28083
+         /proxy/movement      → Movimentation Service   :28084
+         /proxy/document      → Document Service        :28085
+         /proxy/configurator  → Configurator Service     :28081
+         /proxy/support       → Support Service          :28082`} />
 
                         <SectionTitle color={primary}>Proxy e CORS</SectionTitle>
-                        <p>Em desenvolvimento, o <code>next.config.ts</code> usa <strong>rewrites</strong> para evitar CORS: toda chamada a <code>/proxy/&lt;service&gt;/*</code> é reescrita para o backend real. Em produção, cada variável <code>NEXT_PUBLIC_SERVICE_*_PRODUCTION</code> aponta diretamente para o host do serviço.</p>
+                        <p>Tanto em desenvolvimento quanto em produção, toda chamada a <code>/proxy/&lt;serviço&gt;/*</code> é resolvida pelo mesmo route handler (<code>src/app/proxy/[...path]/route.ts</code>), que lê a variável <code>SERVICE_*_URL</code> correspondente **no servidor** e repassa a requisição — não há CORS porque o browser nunca chama o backend diretamente, só o próprio domínio do Next.js. Não existe alternância de comportamento por ambiente: o que muda entre local e produção é só o valor das variáveis (ver aba "Variáveis de Ambiente").</p>
 
                         <SectionTitle color={primary}>Autenticação JWT</SectionTitle>
                         <ul style={{ paddingLeft: "2rem", lineHeight: 2 }}>
-                            <li><strong>accessToken</strong> — JWT de 15 min, enviado no header <code>Authorization: Bearer</code></li>
-                            <li><strong>refreshToken</strong> — JWT de 7 dias, enviado ao endpoint <code>/token/refresh</code> para renovar o access</li>
-                            <li>Tokens armazenados em <code>localStorage</code> + cookie de sessão <code>finlumia_session</code></li>
-                            <li>Single-flight refresh: múltiplos requests 401 simultâneos aguardam uma única renovação</li>
+                            <li><strong>accessToken</strong> — JWT de 15 min, guardado em cookie <code>HttpOnly</code> <code>finlumia_access</code> (nunca chega ao JavaScript do browser)</li>
+                            <li><strong>refreshToken</strong> — JWT de 30 dias, guardado em cookie <code>HttpOnly</code> <code>finlumia_refresh</code>, enviado ao endpoint <code>/token/refresh</code> para renovar o access</li>
+                            <li>É o proxy quem lê o cookie e injeta o header <code>Authorization: Bearer</code> na chamada ao backend real — o cliente nunca monta esse header</li>
+                            <li>Refresh automático em caso de 401: múltiplos requests concorrentes que expiram juntos compartilham uma única renovação (dedup de ~5s) em vez de disparar refresh em paralelo</li>
                         </ul>
 
                         <SectionTitle color={primary}>Roles de usuário</SectionTitle>
@@ -259,28 +258,31 @@ docker compose -f docker-compose.prod.yml up --build -d
                         <CodeBlock isDark={isDark} border={border} code={`src/
 ├── app/                    # Rotas Next.js (App Router)
 │   ├── dashboard/          # Layout autenticado + páginas
-│   └── (public)/           # Login, forgot-password, reset
+│   ├── api/auth/           # login, google, logout — setam/removem cookies HttpOnly
+│   ├── proxy/[...path]/    # Único gateway para os 5 microserviços (ver Arquitetura)
+│   └── (public)/           # Login, forgot-password, reset, privacy, terms
 ├── components/
 │   ├── atoms/              # Input, Button, Select...
 │   ├── molecules/          # Combinações de átomos
-│   └── organisms/          # Sidebar, Modais, DataTable...
+│   ├── organisms/          # Sidebar, Modais, DataTable, TicketAttachments...
 │   └── pages/              # Componentes de página completa
 ├── contexts/               # AuthContext, TourContext
 ├── shared/
 │   ├── finance/            # FinanceContext + Period utils
 │   └── styles/             # Tokens de tema, ThemeContext
-├── services/               # Camada de acesso à API
+├── services/               # Camada de acesso à API (padrão mais antigo)
 │   ├── identification/     # auth.service, profile.service
 │   ├── movimentation/      # movement.service
 │   ├── document/           # document.service
 │   └── configurator/       # configurator.service
 ├── api/
-│   ├── Endpoints.ts        # Catálogo central de endpoints
+│   ├── Endpoints.ts        # Catálogo central — todas as rotas prefixadas /proxy/<serviço>
 │   └── types.ts            # Todos os tipos TypeScript
 ├── config/
 │   └── navigation.json     # Estrutura da sidebar
 └── lib/
-    └── http-client.ts      # fetch + JWT refresh automático`} />
+    ├── http-client.ts      # fetch wrapper — credentials:"same-origin", trata 401 residual
+    └── support.api.ts      # Camada de acesso à API do módulo de suporte (padrão mais novo)`} />
 
                         <SectionTitle color={primary}>Contextos principais</SectionTitle>
                         <ul style={{ paddingLeft: "2rem", lineHeight: 2 }}>
@@ -373,6 +375,19 @@ const f = getFoundationByTheme(theme);
                                     ["GET/POST", "/triggers", "Triggers de banco"],
                                 ],
                             },
+                            {
+                                name: "Support Service", port: "28082", prefix: "/api/v1/support",
+                                desc: "Tickets de suporte, respostas e anexos (upload direto ao storage via URL assinada, com conversão assíncrona de vídeo).",
+                                endpoints: [
+                                    ["GET/POST", "/tickets", "Lista (paginada) e cria tickets"],
+                                    ["GET/PATCH/DELETE", "/tickets/:id", "Detalhe, atualização (status/prioridade) e remoção"],
+                                    ["GET/POST", "/tickets/:id/responses", "Histórico e nova resposta (com nota interna)"],
+                                    ["POST", "/tickets/:id/attachments/presign", "1/3 — pede URL assinada de upload"],
+                                    ["POST", "/tickets/:id/attachments/:attId/complete", "3/3 — confirma upload, dispara conversão se for vídeo"],
+                                    ["GET", "/tickets/:id/attachments/:attId/download", "Redirect (302) para URL assinada de leitura"],
+                                    ["GET", "/tickets/stats", "Contagens por status/categoria/prioridade"],
+                                ],
+                            },
                         ].map((svc) => (
                             <div key={svc.name} style={{ marginBottom: "2.4rem" }}>
                                 <SectionTitle color={primary}>{svc.name} <span style={{ fontSize: "1.2rem", color: muted, fontFamily: "monospace" }}>:{svc.port}</span></SectionTitle>
@@ -406,39 +421,49 @@ const f = getFoundationByTheme(theme);
                 {activeTab === "env" && (
                     <div style={prose}>
                         <h2 style={{ fontSize: "1.9rem", fontWeight: 700, color: f.colors.text.primary, marginBottom: "1.2rem" }}>Variáveis de Ambiente</h2>
-                        <p>Copie <code>.env.example</code> para <code>.env.local</code> e ajuste conforme o ambiente.</p>
+                        <p>Copie <code>.env.example</code> para <code>.env.local</code> e ajuste conforme o ambiente. Não existe uma chave que troca o "ambiente" em runtime — o arquivo tem <strong>um único conjunto de valores</strong>, apontando para onde quer que os 5 microserviços estejam rodando naquele momento (local, homologação ou produção).</p>
                         <InfoBox type="info" f={f} isDark={isDark}>
-                            Variáveis <code>NEXT_PUBLIC_</code> ficam expostas no bundle do browser. Nunca coloque secrets nelas.
+                            As 5 variáveis <code>SERVICE_*_URL</code> são <strong>server-only</strong> (sem prefixo <code>NEXT_PUBLIC_</code>) — só o proxy Next.js as lê, nunca chegam ao bundle do browser. Já <code>NEXT_PUBLIC_GOOGLE_CLIENT_ID</code> e as feature flags são, de fato, públicas (não são segredo).
+                        </InfoBox>
+                        <InfoBox type="warn" f={f} isDark={isDark}>
+                            Rodando o frontend dentro de um container Docker (<code>finlumia.ps1 -up</code>)? <code>localhost</code> dentro do container aponta para o próprio container, não para o host. Se os backends rodam em containers separados publicando portas no host, use <code>host.docker.internal</code> em vez de <code>localhost</code> nas 5 variáveis abaixo.
                         </InfoBox>
 
                         {[
                             {
-                                group: "Ambiente", vars: [
-                                    ["NEXT_PUBLIC_APP_ENV", "local | homologation | production", "Define qual conjunto de URLs de backend usar"],
-                                ],
-                            },
-                            {
-                                group: "Identification (local = proxy automático)", vars: [
-                                    ["NEXT_PUBLIC_SERVICE_IDENTIFICATION_HOMOLOGATION", "https://host/identification", "URL do serviço em homologação"],
-                                    ["NEXT_PUBLIC_SERVICE_IDENTIFICATION_PRODUCTION", "https://apifinlumia.dominio.com.br/identification", "URL do serviço em produção"],
+                                group: "Identification", vars: [
+                                    ["SERVICE_IDENTIFICATION_URL", "http://localhost:28083", "Login, cadastro, tokens JWT, perfil"],
                                 ],
                             },
                             {
                                 group: "Movimentation", vars: [
-                                    ["NEXT_PUBLIC_SERVICE_MOVIMENTATION_HOMOLOGATION", "https://host/movimentation", ""],
-                                    ["NEXT_PUBLIC_SERVICE_MOVIMENTATION_PRODUCTION", "https://apifinlumia.dominio.com.br/movimentation", ""],
+                                    ["SERVICE_MOVIMENTATION_URL", "http://localhost:28084", "Transações, categorias, bancos, importação"],
                                 ],
                             },
                             {
                                 group: "Document", vars: [
-                                    ["NEXT_PUBLIC_SERVICE_DOCUMENT_HOMOLOGATION", "https://host/document", ""],
-                                    ["NEXT_PUBLIC_SERVICE_DOCUMENT_PRODUCTION", "https://apifinlumia.dominio.com.br/document", ""],
+                                    ["SERVICE_DOCUMENT_URL", "http://localhost:28085", "Relatórios, gráficos, exportação"],
                                 ],
                             },
                             {
                                 group: "Configurator", vars: [
-                                    ["NEXT_PUBLIC_SERVICE_CONFIGURATOR_HOMOLOGATION", "https://host/configurator", ""],
-                                    ["NEXT_PUBLIC_SERVICE_CONFIGURATOR_PRODUCTION", "https://apifinlumia.dominio.com.br/configurator", ""],
+                                    ["SERVICE_CONFIGURATOR_URL", "http://localhost:28081", "Metadados: tabelas, campos, usuários, permissões"],
+                                ],
+                            },
+                            {
+                                group: "Support", vars: [
+                                    ["SERVICE_SUPPORT_URL", "http://localhost:28082", "Tickets de suporte, anexos"],
+                                ],
+                            },
+                            {
+                                group: "Autenticação Google (pública)", vars: [
+                                    ["NEXT_PUBLIC_GOOGLE_CLIENT_ID", "<client-id>.apps.googleusercontent.com", "Client ID do Google Cloud Console para login OAuth"],
+                                ],
+                            },
+                            {
+                                group: "Feature flags (públicas, opcionais)", vars: [
+                                    ["NEXT_PUBLIC_FEATURE_IMPORT_ENABLED", "true | false", "Habilita a importação de extratos"],
+                                    ["NEXT_PUBLIC_FEATURE_MFA_ENABLED", "true | false", "Habilita autenticação MFA"],
                                 ],
                             },
                         ].map((g) => (
@@ -468,19 +493,26 @@ const f = getFoundationByTheme(theme);
                         ))}
 
                         <SectionTitle color={primary}>Arquivo .env.local completo (template)</SectionTitle>
-                        <CodeBlock isDark={isDark} border={border} code={`NEXT_PUBLIC_APP_ENV=local
+                        <CodeBlock isDark={isDark} border={border} code={`# Local — backends rodando no host (sem Docker)
+SERVICE_IDENTIFICATION_URL=http://localhost:28083
+SERVICE_MOVIMENTATION_URL=http://localhost:28084
+SERVICE_DOCUMENT_URL=http://localhost:28085
+SERVICE_CONFIGURATOR_URL=http://localhost:28081
+SERVICE_SUPPORT_URL=http://localhost:28082
 
-# Homologação
-NEXT_PUBLIC_SERVICE_IDENTIFICATION_HOMOLOGATION=
-NEXT_PUBLIC_SERVICE_MOVIMENTATION_HOMOLOGATION=
-NEXT_PUBLIC_SERVICE_DOCUMENT_HOMOLOGATION=
-NEXT_PUBLIC_SERVICE_CONFIGURATOR_HOMOLOGATION=
+# Local — frontend rodando em container Docker e backends em containers
+# separados: troque "localhost" por "host.docker.internal" acima.
 
-# Produção
-NEXT_PUBLIC_SERVICE_IDENTIFICATION_PRODUCTION=https://apifinlumia.seudominio.com.br/identification
-NEXT_PUBLIC_SERVICE_MOVIMENTATION_PRODUCTION=https://apifinlumia.seudominio.com.br/movimentation
-NEXT_PUBLIC_SERVICE_DOCUMENT_PRODUCTION=https://apifinlumia.seudominio.com.br/document
-NEXT_PUBLIC_SERVICE_CONFIGURATOR_PRODUCTION=https://apifinlumia.seudominio.com.br/configurator`} />
+# Produção — subdomínio dedicado por serviço
+# SERVICE_IDENTIFICATION_URL=https://apifinlumia.identification.thiagobenevide.com
+# SERVICE_MOVIMENTATION_URL=https://apifinlumia.movimentation.thiagobenevide.com
+# SERVICE_DOCUMENT_URL=https://apifinlumia.document.thiagobenevide.com
+# SERVICE_CONFIGURATOR_URL=https://apifinlumia.configurator.thiagobenevide.com
+# SERVICE_SUPPORT_URL=https://apifinlumia.docs.thiagobenevide.com
+
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=
+NEXT_PUBLIC_FEATURE_IMPORT_ENABLED=false
+NEXT_PUBLIC_FEATURE_MFA_ENABLED=true`} />
                     </div>
                 )}
 

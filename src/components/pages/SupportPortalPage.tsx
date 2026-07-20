@@ -5,6 +5,7 @@ import { getFoundationByTheme } from "../../shared/styles/tokens";
 import { useTheme } from "../../shared/styles/theme.context";
 import { useAuth } from "../../contexts/auth.context";
 import { supportApi, supportErrorMessage } from "../../lib/support.api";
+import { TicketAttachments } from "../organisms/TicketAttachments/TicketAttachments";
 import type {
     TicketCategory, TicketPriority, TicketStatus,
     TicketListItem, TicketDetail, TicketStats,
@@ -361,6 +362,17 @@ function PortalContent({
         setPatchError(null);
         setConfirmDelete(false);
     };
+
+    // Identidade estável (deps vazias) — usada pelo polling de conversion_status
+    // dentro de <TicketAttachments>, que re-dispara o efeito toda vez que a
+    // referência de onRefresh mudar.
+    const refreshSelected = useCallback(async () => {
+        setSelected((prev) => {
+            if (!prev) return prev;
+            supportApi.getTicket(prev.id).then(setSelected).catch(() => {});
+            return prev;
+        });
+    }, []);
 
     const handleDragDrop = async (targetStatus: TicketStatus) => {
         if (!draggingId) return;
@@ -771,6 +783,15 @@ function PortalContent({
                                         </div>
                                     </div>
                                 )}
+
+                                {/* Attachments */}
+                                <TicketAttachments
+                                    ticketId={selected.id}
+                                    attachments={selected.attachments}
+                                    onRefresh={refreshSelected}
+                                    canUpload={selected.status !== "fechado"}
+                                    f={f} isDark={isDark} border={border} muted={muted} primary={primary}
+                                />
 
                                 {/* Patch controls */}
                                 <div style={{ ...cardStyle, padding: "1.6rem", marginBottom: "2rem" }}>
