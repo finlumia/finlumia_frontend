@@ -21,6 +21,13 @@ function generateNonce(): string {
   return btoa(String.fromCharCode(...bytes));
 }
 
+// Origem do storage (MinIO/S3) usada pelos anexos de suporte. O upload (PUT) e a
+// exibição de imagem/vídeo acontecem direto browser→storage, com URL assinada
+// devolvida pelo backend — essa é a ÚNICA chamada que sai do same-origin, então
+// precisa de allowlist explícita na CSP (connect-src para o PUT via fetch/XHR,
+// img-src/media-src para <img>/<video> apontando pra essa origem após o presign).
+const STORAGE_ORIGIN = process.env.STORAGE_ORIGIN ?? "https://apifinlumia-storage.thiagobenevide.com";
+
 function buildCsp(nonce: string): string {
   const isDev = process.env.NODE_ENV !== "production";
 
@@ -33,10 +40,15 @@ function buildCsp(nonce: string): string {
     // Estilos inline são necessários pelo design system (style={{ }}).
     // accounts.google.com é necessário para a folha de estilo do botão do Google Identity Services.
     "style-src 'self' 'unsafe-inline' https://accounts.google.com",
-    "img-src 'self' data: blob:",
+    // Thumbnails de anexo (<img>) podem apontar direto pro storage após o presign.
+    `img-src 'self' data: blob: ${STORAGE_ORIGIN}`,
+    // Player de vídeo dos anexos (<video src>) — sem essa diretiva o CSP cai
+    // em default-src 'self' e bloqueia a origem do storage.
+    `media-src 'self' ${STORAGE_ORIGIN}`,
     "font-src 'self' data:",
-    // Todo tráfego de API passa pelo proxy (same-origin) — exceto o Google Identity Services.
-    "connect-src 'self' https://accounts.google.com",
+    // Todo tráfego de API passa pelo proxy (same-origin), exceto o Google
+    // Identity Services e o PUT direto ao storage no upload de anexos.
+    `connect-src 'self' https://accounts.google.com ${STORAGE_ORIGIN}`,
     // O botão/One Tap do Google renderiza dentro de um iframe do próprio Google.
     "frame-src https://accounts.google.com",
     "frame-ancestors 'none'",
