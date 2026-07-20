@@ -12,6 +12,14 @@ import type { TicketAttachment } from "../../../api/types";
 // a conversão roda assíncrona no backend, não há webhook/SSE para nos avisar.
 const POLL_INTERVAL_MS = 4000;
 
+// O backend devolve `url`/`thumbnail_url` como path relativo à raiz da API
+// real (ex.: "/api/v1/support/tickets/:id/attachments/:attId/download") — o
+// browser não tem acesso direto a esse host, só ao proxy Next.js. Precisa
+// prefixar com "/proxy/support" antes de usar como src de <video>/<img>.
+function toSupportProxyPath(path: string): string {
+    return path.startsWith("/proxy/") ? path : `/proxy/support${path}`;
+}
+
 function formatBytes(bytes: number) {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -142,8 +150,8 @@ export function TicketAttachments({ ticketId, attachments, onRefresh, canUpload,
                                         <video
                                             controls
                                             preload="none"
-                                            poster={a.thumbnail_url ?? undefined}
-                                            src={a.url}
+                                            poster={a.thumbnail_url ? toSupportProxyPath(a.thumbnail_url) : undefined}
+                                            src={toSupportProxyPath(a.url)}
                                             style={{ width: "100%", maxHeight: "24rem", borderRadius: "0.8rem", backgroundColor: "#000" }}
                                         />
                                     )}
